@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportProjectMetadata} from './avatar-core.mjs';
 
 const $ = id => document.getElementById(id);
@@ -22,6 +23,21 @@ const grid=new THREE.GridHelper(12,24,0x57586a,0x2e3342);grid.position.y=-.012;s
 const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
 let base=null,modelName='',clips=[],parts=[],selection=null,serial=0;
+const transform=new TransformControls(camera,renderer.domElement);
+transform.setMode('translate');
+transform.setSpace('local');
+transform.setSize(1.15);
+scene.add(transform.getHelper());
+let transformMode='move';
+let freeBall=false;
+let coordinateSpace='local';
+transform.addEventListener('dragging-changed', e=>{orbit.enabled=!e.value;});
+transform.addEventListener('objectChange', ()=>{
+ const p=selected();
+ if(!p || transform.object!==p.container) return;
+ readObjectTransform(p);
+ updateTransformFields(p);
+});
 const toast=message=>{$('toast').textContent=message;};
 const error=e=>{console.error(e);toast('Ошибка: '+(e?.message||String(e)));};
 const saveFile=(bytes,name,type)=>{
@@ -61,6 +77,7 @@ function writeMorphs(){
 }
 async function loadBase(file){
  toast('Загрузка 3D-модели…');const gltf=await parseGLB(file);
+ transform.detach(); orbit.enabled=true;
  for(const p of parts)p.container.parent?.remove(p.container);
  parts=[];selection=null;
  if(base){avatar.remove(base);dispose(base);}
@@ -74,6 +91,32 @@ function placePart(p){
  p.container.rotation.set(...p.config.rotation.map(THREE.MathUtils.degToRad));
  p.container.scale.setScalar(p.config.scale);p.container.visible=p.config.visible;
 }
+function readObjectTransform(p){
+ p.config.position=p.container.position.toArray();
+ p.config.rotation=[p.container.rotation.x,p.container.rotation.y,p.container.rotation.z].map(THREE.MathUtils.radToDeg);
+ p.config.scale=p.container.scale.x;
+}
+function updateTransformFields(p){
+ const values={pScale:p.config.scale,pX:p.config.position[0],pY:p.config.position[1],pZ:p.config.position[2],rX:p.config.rotation[0],rY:p.config.rotation[1],rZ:p.config.rotation[2]};
+ for(const [id,value] of Object.entries(values)){
+  const input=$(id);
+  if(input && document.activeElement!==input) input.value=String(Math.round(value*1000)/1000);
+ }
+}
+function activateGizmo(p){
+ if(!p || !p.config.visible){transform.detach();orbit.enabled=true;return;}
+ if(transform.object!==p.container)transform.attach(p.container);
+}
+function setTransformMode(mode){
+ transformMode=mode;
+ freeBall=mode==='ball';
+ transform.setMode(mode==='move'?'translate':'rotate');
+ transform.showX=!freeBall;transform.showY=!freeBall;transform.showZ=!freeBall;
+ for(const [id,active] of Object.entries({modeMove:mode==='move',modeRotate:mode==='rotate',modeBall:mode==='ball'})){
+  $(id).classList.toggle('active',active);
+  $(id).setAttribute('aria-pressed',String(active));
+ }
+}
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
  for(const p of parts){
@@ -82,7 +125,8 @@ function renderParts(){
   const visibility=document.createElement('span');visibility.textContent=p.config.visible?'👁':'—';row.append(visibility);list.append(row);
  }
  const p=selected();$('partEditor').hidden=!p;
- if(p)for(const [id,value] of Object.entries({pScale:p.config.scale,pX:p.config.position[0],pY:p.config.position[1],pZ:p.config.position[2],pRot:p.config.rotation[1]}))$(id).value=value;
+ activateGizmo(p);
+ if(p)updateTransformFields(p);
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
@@ -115,12 +159,46 @@ $('demo').addEventListener('click',async()=>{
  }
 });
 $('fit').addEventListener('click',centerView);
-for(const id of ['pScale','pX','pY','pZ','pRot']) $(id).addEventListener('input',()=>{
+// Numerical controls use the bone-local coordinate system (unbounded precision).
+function applyTypedTransform(){
  const p=selected();if(!p)return;
- p.config.position=[+$('pX').value,+$('pY').value,+$('pZ').value];
- p.config.rotation=[0,+$('pRot').value,0];p.config.scale=+$('pScale').value;placePart(p);
+ const read=id=>Number.parseFloat($(id).value);
+ const pos=['pX','pY','pZ'].map(read),rot=['rX','rY','rZ'].map(read),scale=read('pScale');
+ if(![...pos,...rot,scale].every(Number.isFinite)||scale<=0){toast('Нужны корректные числа и положительный масштаб.');return;}
+ p.config.position=pos;p.config.rotation=rot;p.config.scale=scale;
+ placePart(p);
+}
+for(const id of ['pX','pY','pZ','rX','rY','rZ']) $(id).addEventListener('change',applyTypedTransform);
+$('pScale').addEventListener('input',applyTypedTransform);
+for(const button of document.querySelectorAll('[data-adjust]')){
+ button.addEventListener('click',()=>{
+  const input=$(button.dataset.adjust);
+  const delta=Number(button.dataset.delta);
+  input.value=String(Math.round((Number(input.value||0)+delta)*100000)/100000);
+  applyTypedTransform();
+  updateTransformFields(selected());
+ });
+}
+$('modeMove').addEventListener('click',()=>setTransformMode('move'));
+$('modeRotate').addEventListener('click',()=>setTransformMode('rotate'));
+$('modeBall').addEventListener('click',()=>setTransformMode('ball'));
+$('spaceMode').addEventListener('click',()=>{
+ coordinateSpace=coordinateSpace==='local'?'world':'local';
+ transform.setSpace(coordinateSpace);
+ $('spaceMode').textContent=coordinateSpace==='local'?'Оси: локальные':'Оси: мировые';
+ toast(coordinateSpace==='local'?'Оси гизмо ориентированы по детали. Числа остаются относительно кости.':'Оси гизмо ориентированы по миру. Числа остаются относительно кости.');
 });
-$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.container.parent?.remove(p.container);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
+function resetTransform(what){
+ const p=selected();if(!p)return;
+ if(what==='position'||what==='all')p.config.position=[0,0,0];
+ if(what==='rotation'||what==='all')p.config.rotation=[0,0,0];
+ if(what==='all')p.config.scale=1;
+ placePart(p);updateTransformFields(p);
+}
+$('resetPosition').addEventListener('click',()=>resetTransform('position'));
+$('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
+$('resetAll').addEventListener('click',()=>resetTransform('all'));
+$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;transform.detach();p.container.parent?.remove(p.container);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
 $('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
 $('saveJson').addEventListener('click',()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
