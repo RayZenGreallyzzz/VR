@@ -24,7 +24,8 @@ test('scale requires intentional numeric input, supports comma',()=>{
 });
 test('fallback back anchor is mid-body rather than at head height',()=>{
  const b={min:{x:-.3,y:0,z:-.1},max:{x:.3,y:2,z:.3}};
- assert.deepEqual(defaultAnchorPoint(b,'back'),{x:0,y:1.4,z:.1});
+ const p=defaultAnchorPoint(b,'back');
+ assert.equal(p.x,0);assert.ok(Math.abs(p.y-1.4)<1e-9);assert.ok(Math.abs(p.z-.1)<1e-9);
  assert.ok(defaultAnchorPoint(b,'head').y>defaultAnchorPoint(b,'back').y);
 });
 test('scale has no touch slider and only buttons / explicit Apply',()=>{
