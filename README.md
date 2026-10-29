@@ -2,6 +2,18 @@
 
 Separate avatar-customization app derived from the workflow of Rig Animation Studio **v7.9**. Does not modify the original animation editor.
 
+## v0.3 — Android Save As + wing mesh baking
+
+- **Export GLB / JSON** opens Android's system **Create Document** picker so you can select the destination folder and filename. Files are streamed to the selected URI in 96 KiB chunks.
+- **Wings** now have non-destructive geometry modifiers for a bend at the center hinge, lengthening the outer span, and moving the hinge.
+- The actual `BufferGeometry` vertices are edited while preserving materials, UV attributes, mesh hierarchy, and skin attributes; the modified wing geometry is exported.
+- Before saving, the exported binary GLB is parsed back and attachments are counted; if an attachment is missing, save is stopped.
+- Added automated GLB round-trip regression coverage.
+
+**Important:** adding details to one GLB file **does not** automatically fuse them to the body skin mesh or paint deformation weights. Rigid accessories remain separate meshes attached to the chosen bone. An actual skinned, seamless body/garment merge requires a later skin-transfer workflow.
+
+v0.3 uses a new Android package ID for side-by-side testing with v0.1 and v0.2. APK installation and SAF file picker still need manual Android 15 verification.
+
 ## v0.2 — 3D transforms (Android touch)
 
 1. Import the main avatar GLB, then import any accessory GLB.
