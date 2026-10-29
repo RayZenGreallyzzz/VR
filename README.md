@@ -2,6 +2,17 @@
 
 Separate avatar-customization app derived from the workflow of Rig Animation Studio **v7.9**. Does not modify the original animation editor.
 
+## v0.4 — Android touch crash prevention
+
+- Scale control is now **explicit**: `− / +` or type a number and press `Применить`. Scrolling the menu cannot drag a scale slider.
+- Imported accessory size is clamped to the size of the loaded avatar (wings at most ~3 avatar heights in span; tail ~2 heights). A clear warning appears when capped.
+- Wing bend/stretch sliders start locked and re-lock on scrolling or after inactivity. They can be unlocked deliberately.
+- Live wing deformation is coalesced into one animation frame; very dense wings (>100,000 vertices) remain attachable but skip live deformation to reduce memory pressure on 4 GB Android devices.
+- Mobile WebGL pixel ratio limited to 1 and rendering limited to approximately 30 FPS.
+- If the model has no suitable skeleton bone, accessories use stable **back/hips/head fallback locators** based on the avatar's *original* body bounds instead of inheriting an arbitrary root offset.
+
+**QA:** The new size limit is a protection for mobile interactive editing, not a permanent polygon limit on imported avatar models. It does not auto-skin parts or generate missing bones. Actual crash cause still requires Android logcat evidence; this patch targets the reproducible unsafe scenario.
+
 ## v0.3 — Android Save As + wing mesh baking
 
 - **Export GLB / JSON** opens Android's system **Create Document** picker so you can select the destination folder and filename. Files are streamed to the selected URI in 96 KiB chunks.
