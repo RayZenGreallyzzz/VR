@@ -100,7 +100,19 @@ $('baseFile').addEventListener('change',async e=>{const f=e.target.files?.[0];if
 $('partFile').addEventListener('change',async e=>{const f=e.target.files?.[0];if(f)try{await addPart(f);}catch(err){error(err)}e.target.value='';});
 $('demo').addEventListener('click',async()=>{
  try{const response=await fetch('./demo/Human_Male_Android.glb');if(!response.ok)throw new Error('В репозитории демо-модель не включена; загрузи свой GLB или распакуй полный архив с демо.');
- await loadBase(new File([await response.blob()],'Human_Male_Android.glb',{type:'model/gltf-binary'}));}catch(e){error(e)}
+ await loadBase(new File([await response.blob()],'Human_Male_Android.glb',{type:'model/gltf-binary'}));}catch(e){
+  try {
+    const dummy=new THREE.Group(),mat=new THREE.MeshStandardMaterial({color:0x9a8aa0,roughness:.85});
+    const add=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);dummy.add(m);};
+    add(new THREE.BoxGeometry(.58,.68,.30),0,1.25,0);
+    add(new THREE.SphereGeometry(.24,16,12),0,1.87,0);
+    for(const x of [-.43,.43])add(new THREE.BoxGeometry(.19,.71,.2),x,1.24,0);
+    for(const x of [-.16,.16])add(new THREE.BoxGeometry(.20,.77,.22),x,.53,0);
+    const result=await new Promise((resolve,reject)=>new GLTFExporter().parse(dummy,resolve,reject,{binary:true}));
+    await loadBase(new File([result],'Demo_Mannequin_No_Rig.glb',{type:'model/gltf-binary'}));
+    toast('Демо-манекен без скелета. Импортируй зариганный GLB для настройки костей.');
+  }catch(err){error(err);}
+ }
 });
 $('fit').addEventListener('click',centerView);
 for(const id of ['pScale','pX','pY','pZ','pRot']) $(id).addEventListener('input',()=>{
