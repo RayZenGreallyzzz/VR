@@ -18,7 +18,7 @@ test('a bone-attached, bent wing is physically present in exported and re-import
  const body=new THREE.Mesh(new THREE.BoxGeometry(.5,1,.3),new THREE.MeshStandardMaterial());body.name='Body';
  avatar.add(body);
  const bone=new THREE.Bone();bone.name='Hips';avatar.add(bone);
- const container=new THREE.Group();container.name='Attachment:Wings.glb';bone.add(container);
+ const container=new THREE.Group();container.name='Attachment:Wings.glb';container.userData.avatarPart={id:'wing-test',type:'wings',anchor:'back'};bone.add(container);
  const wing=new THREE.Mesh(new THREE.BoxGeometry(4,.2,.2),new THREE.MeshStandardMaterial({color:0x7777ff}));wing.name='WingGeometry';
  container.add(wing);
  const source=captureWingGeometry(container);
@@ -31,7 +31,7 @@ test('a bone-attached, bent wing is physically present in exported and re-import
  const imported=await new Promise((resolve,reject)=>new GLTFLoader().parse(exported,'',resolve,reject));
  let recoveredParts=0,recoveredMeshes=0,wingFound=false;
  imported.scene.traverse(o=>{
-  if(o.name==='Attachment:Wings.glb')recoveredParts++;
+  if(o.userData?.avatarPart?.id==='wing-test')recoveredParts++;
   if(o.isMesh)recoveredMeshes++;
   if(o.name==='WingGeometry'){wingFound=true;const a=o.geometry.attributes.position;
    let maxZ=-Infinity;for(let i=0;i<a.count;i++)maxZ=Math.max(maxZ,a.getZ(i));
