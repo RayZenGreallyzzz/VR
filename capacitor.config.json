@@ -1,0 +1,8 @@
+{
+  "appId": "com.rayzen.phoenixvravatarstudio",
+  "appName": "Phoenix VR Avatar Studio",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#101219"
+  }
+}
