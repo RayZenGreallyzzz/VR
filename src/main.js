@@ -254,7 +254,7 @@ $('exportGlb').addEventListener('click',async()=>{
   const roundtrip=await new Promise((resolve,reject)=>loader.parse(exported,'',resolve,reject));
   const expected=parts.filter(p=>p.config.visible).length;
   let recovered=0;
-  roundtrip.scene.traverse(o=>{if(o.name?.startsWith('Attachment:'))recovered++;});
+  roundtrip.scene.traverse(o=>{if(o.userData?.avatarPart?.id)recovered++;});
   if(recovered<expected)throw new Error('Проверка запекания: найдено '+recovered+' деталей из '+expected+'. Сохранение отменено.');
   const info=inspectAvatar(roundtrip.scene);
   if(info.meshes<1)throw new Error('GLB после повторного открытия не содержит мешей.');
