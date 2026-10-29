@@ -25,7 +25,7 @@ const rim=new THREE.DirectionalLight(0xb1a5ff,2);rim.position.set(-4,3,-2);scene
 const grid=new THREE.GridHelper(12,24,0x57586a,0x2e3342);grid.position.y=-.012;scene.add(grid);
 const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
-let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1;
+let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1,baseBoundingBox=null;
 const transform=new TransformControls(camera,renderer.domElement);
 transform.setMode('translate');
 transform.setSpace('local');
@@ -88,6 +88,7 @@ async function loadBase(file){
  base=gltf.scene;base.name='BaseAvatar';avatar.add(base);modelName=file.name||'avatar.glb';clips=gltf.animations||[];
  const avatarBox=new THREE.Box3().setFromObject(base);
  avatarHeight=Math.max(.1,avatarBox.getSize(new THREE.Vector3()).y);
+ baseBoundingBox=avatarBox.clone();
  centerView();writeMetrics();writeMorphs();renderParts();
  toast('Модель загружена: '+modelName+'. Можно добавлять волосы и аксессуары.');
 }
@@ -220,8 +221,7 @@ async function addPart(file){
  if(bone)bone.add(container);
  else {
   fallback=new THREE.Group();fallback.name='AvatarAnchor:'+anchor;
-  const box=new THREE.Box3().setFromObject(base);
-  const pos=defaultAnchorPoint(box,anchor);
+  const pos=defaultAnchorPoint(baseBoundingBox,anchor);
   base.add(fallback);
   base.updateWorldMatrix(true,true);
   const point=base.worldToLocal(new THREE.Vector3(pos.x,pos.y,pos.z));
