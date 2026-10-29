@@ -210,6 +210,97 @@ $('resetWings').addEventListener('click',()=>{
  p.config.wingCenterOffset=0;p.config.wingSpanAxis='auto';p.config.wingFoldDirection=-1;
  queueWingDeformation(p);syncWingSliders(p);lockWings();
 });
+function movePartToBack(p){
+ if(!base||p.config.anchor==='back')return;
+ // Re-anchoring a detail previously imported as hair/other makes wings
+ // actually sit on the back rather than stay parented to a head bone.
+ if(p.fallback){p.fallback.parent?.remove(p.fallback);p.fallback=null;}
+ let back=selectAnchorBone(base,'back');
+ if(!back){
+  back=new THREE.Group();
+  back.name='AvatarAnchor:back';
+  const pos=defaultAnchorPoint(baseBoundingBox,'back');
+  base.add(back);
+  base.updateWorldMatrix(true,true);
+  back.position.copy(base.worldToLocal(new THREE.Vector3(pos.x,pos.y,pos.z)));
+  p.fallback=back;
+ }
+ back.add(p.container);
+ p.config.anchor='back';
+ p.container.userData.avatarPart.anchor='back';
+ p.config.position=[0,0,0];
+ p.config.rotation=[0,0,0];
+ placePart(p);
+}
+function assignPartAsWings(p){
+ if(!p)return false;
+ if(p.wingSource)return true;
+ const total=p.wingVertices ?? countPartVertices(p.container);
+ p.wingVertices=total;
+ if(total===0){p.wingProblem='В этой детали нет 3D-вершин.';return false;}
+ if(total>MAX_WING_VERTICES){
+  p.wingProblem='В детали '+total.toLocaleString('ru-RU')+' вершин — больше безопасных '+MAX_WING_VERTICES.toLocaleString('ru-RU')+'. Для сгиба на планшете нужна облегчённая модель крыльев.';
+  return false;
+ }
+ try{
+  p.wingSource=captureWingGeometry(p.container);
+  p.wingProblem=p.wingSource?'':'Не удалось прочитать геометрию крыльев.';
+  if(p.wingSource){
+   p.config.type='wings';
+   p.container.userData.avatarPart.type='wings';
+   p.maxScale=limitAccessoryScale(1,p.sourceSpan,avatarHeight,'wings').maxScale;
+   movePartToBack(p);
+   placePart(p);
+  }
+  return !!p.wingSource;
+ }catch(e){
+  p.wingProblem='Ошибка подготовки сгиба: '+e.message;
+  return false;
+ }
+}
+function countPartVertices(root){
+ let count=0;
+ root.traverse(o=>{if(o.isMesh)count+=o.geometry?.getAttribute('position')?.count||0;});
+ return count;
+}
+function renderWingPanel(){
+ const p=selected(),picker=$('wingTarget'),oldValue=picker.value;
+ picker.replaceChildren();
+ const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='— Выбери импортированную деталь —';picker.append(placeholder);
+ for(const item of parts){
+  const option=document.createElement('option');
+  option.value=item.id;
+  option.textContent=item.config.name+(item.config.type==='wings'?' 🪽':'');
+  picker.append(option);
+ }
+ picker.value=p?.id||'';
+ const ready=!!p?.wingSource;
+ $('wingStatus').textContent=ready
+  ? '✅ Готово: '+p.config.name+'. Можно нажать 25° или 30°; изменения сохраняются в GLB.'
+  : !p
+   ? 'Загрузи персонажа и крылья GLB. После импорта выбери деталь в списке выше.'
+   : p.wingProblem
+    ? '⚠️ '+p.wingProblem
+    : 'ℹ️ Выбрана «'+p.config.name+'» как «'+p.config.type+'». Нажми «Назначить выбранную деталь крыльями».';
+ $('makeWings').disabled=!p||ready||!!p.wingProblem;
+ $('makeWings').textContent=ready?'✅ Крылья готовы':'🪽 Назначить выбранную деталь крыльями';
+ for(const id of ['fold25','fold30','wingAxis','wingDirection','resetWings','wingUnlock']){
+  $(id).disabled=!ready;
+ }
+ lockWings();
+ if(ready)syncWingSliders(p);
+}
+$('wingTarget').addEventListener('change',e=>{
+ const id=e.target.value;
+ selection=parts.some(p=>p.id===id)?id:null;
+ renderParts();
+});
+$('makeWings').addEventListener('click',()=>{
+ const p=selected();if(!p)return;
+ if(assignPartAsWings(p))toast('Сгиб доступен для '+p.config.name+'. Выбери угол 25° или 30°.');
+ else toast(p.wingProblem||'Не удалось подготовить крылья');
+ renderParts();
+});
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
  for(const p of parts){
@@ -221,9 +312,7 @@ function renderParts(){
  activateGizmo(p);
  if(p)updateScaleStatus(p);
  if(p)updateTransformFields(p);
- $('wingTools').hidden=!(p?.config.type==='wings'&&p?.wingSource);
- lockWings();
- if(p?.wingSource)syncWingSliders(p);
+ renderWingPanel();
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
@@ -252,18 +341,10 @@ async function addPart(file){
  }
  const p={id:config.id,config,container,sourceSpan,maxScale:sizeLimit.maxScale,fallback};
  placePart(p);
- if(kind==='wings'){
-  let totalVertices=0;
-  container.traverse(o=>{if(o.isMesh)totalVertices+=o.geometry?.getAttribute('position')?.count||0;});
-  if(totalVertices>MAX_WING_VERTICES){
-   toast('Слишком тяжёлые крылья для деформации ('+totalVertices+' вершин). Можно двигать и вращать, но сгибание выключено.');
-  } else {
-   p.wingSource=captureWingGeometry(container);
-   if(!p.wingSource)toast('В модели крыльев не обнаружен меш для сгибания.');
-  }
- }
+ if(kind==='wings')assignPartAsWings(p);
  parts.push(p);selection=p.id;renderParts();
- toast(bone?'Деталь на кости '+bone.name+'. Масштаб ограничен безопасным пределом.':
+ if(p.wingProblem)toast(p.wingProblem);
+ else toast(bone?'Деталь на кости '+bone.name+'. Масштаб ограничен безопасным пределом.':
   'Кость '+anchor+' не найдена: использована фиксированная точка крепления '+anchor+' на теле (без скелета).');
 }
 $('kind').addEventListener('change',()=>{$('anchor').value=PART_ANCHORS[$('kind').value]||'chest';});

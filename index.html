@@ -9,11 +9,11 @@
 .scale-controls button{min-height:46px;padding:9px 4px}
 .scale-controls input{width:100%;min-width:0;text-align:center;font-size:15px;font-variant-numeric:tabular-nums}
 .sidebar{overscroll-behavior:contain;touch-action:pan-y}
-@media(max-width:700px){main{grid-template-columns:1fr;grid-template-rows:minmax(230px,43dvh) 1fr}.viewport{grid-row:1}.sidebar{grid-row:2;border-right:0;border-top:1px solid var(--border)}header{padding:8px 11px}header strong{font-size:14px}}
+.wing-section{border:1px solid #c59a54;background:#292839}.wing-status{padding:10px 11px;border-radius:9px;border:1px solid #696279;background:#171a2a;color:#e6d7c3;font-size:12px;line-height:1.5}.wing-section #wingTools{padding-top:8px}.wing-section button:disabled{opacity:.5}.wing-section #wingTarget{font-weight:600}@media(max-width:700px){main{grid-template-columns:1fr;grid-template-rows:minmax(230px,43dvh) 1fr}.viewport{grid-row:1}.sidebar{grid-row:2;border-right:0;border-top:1px solid var(--border)}header{padding:8px 11px}header strong{font-size:14px}}
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.5 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.6 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
@@ -31,7 +31,20 @@
  <input id="pScale" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Точный масштаб детали">
  <button id="scalePlus" type="button">+</button><button id="scaleApply" class="primary" type="button">Применить</button></div>
  <div class="hint" id="scaleStatus">Масштаб меняется только кнопками или после «Применить». Прокрутка панели его не меняет.</div>
- </div><div id="wingTools" class="group" hidden>
+ </div><div class="coord-head">Положение относительно кости · метров</div>
+<div class="axis-grid"><div class="axis-row"><label for="pX">X — влево / вправо</label><button type="button" data-adjust="pX" data-delta="-0.05" aria-label="X — влево / вправо, уменьшить">−</button><input id="pX" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pX" data-delta="0.05" aria-label="X — влево / вправо, увеличить">+</button></div><div class="axis-row"><label for="pY">Y — вниз / вверх</label><button type="button" data-adjust="pY" data-delta="-0.05" aria-label="Y — вниз / вверх, уменьшить">−</button><input id="pY" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pY" data-delta="0.05" aria-label="Y — вниз / вверх, увеличить">+</button></div><div class="axis-row"><label for="pZ">Z — назад / вперёд</label><button type="button" data-adjust="pZ" data-delta="-0.05" aria-label="Z — назад / вперёд, уменьшить">−</button><input id="pZ" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pZ" data-delta="0.05" aria-label="Z — назад / вперёд, увеличить">+</button></div></div>
+<div class="coord-head">Поворот относительно кости · градусов</div>
+<div class="axis-grid"><div class="axis-row"><label for="rX">X — наклон</label><button type="button" data-adjust="rX" data-delta="-5" aria-label="X — наклон, уменьшить">−</button><input id="rX" type="number" step="5" value="0" inputmode="decimal"><button type="button" data-adjust="rX" data-delta="5" aria-label="X — наклон, увеличить">+</button></div><div class="axis-row"><label for="rY">Y — разворот</label><button type="button" data-adjust="rY" data-delta="-5" aria-label="Y — разворот, уменьшить">−</button><input id="rY" type="number" step="5" value="0" inputmode="decimal"><button type="button" data-adjust="rY" data-delta="5" aria-label="Y — разворот, увеличить">+</button></div><div class="axis-row"><label for="rZ">Z — крен</label><button type="button" data-adjust="rZ" data-delta="-5" aria-label="Z — крен, уменьшить">−</button><input id="rZ" type="number" step="5" value="0" inputmode="decimal"><button type="button" data-adjust="rZ" data-delta="5" aria-label="Z — крен, увеличить">+</button></div></div>
+<div class="reset-row"><button id="resetPosition">Сброс X/Y/Z</button><button id="resetRotation">Сброс поворота</button><button id="resetAll">Сброс всего</button></div>
+<div class="two"><button id="delPart">Удалить деталь</button><button id="togglePart">Скрыть/показать</button></div>
+</div></div><div class="hint">Деталь привязывается к кости и двигается вместе с ней. Для одежды с деформацией потребуется отдельная операция skin transfer.</div></section>
+<section id="wingSection" class="wing-section" aria-label="Редактор сгиба крыльев">
+<h2>🪽 2А · Сгиб крыльев — всегда доступен</h2>
+<div class="hint">Две прямые половины → V-образный сгиб у крепления на спине.</div>
+<label>Какие крылья редактировать<select id="wingTarget"><option value="">— Выбери импортированную деталь —</option></select></label>
+<div id="wingStatus" class="wing-status" role="status">Импортируй GLB и выбери деталь для сгибания. Этот раздел больше не исчезает.</div>
+<button id="makeWings" type="button">🪽 Назначить выбранную деталь крыльями</button>
+<div id="wingTools" class="group">
 <div class="coord-head">🪽 Сгиб двух крыльев у основания — вид сверху как V</div>
 <div class="two"><button id="fold25" type="button" class="primary">Сложить назад 25°</button><button id="fold30" type="button" class="primary">Сложить назад 30°</button></div>
 <div class="two">
@@ -47,13 +60,8 @@
 <label>Неподвижная полоска у основания <output id="hingeValue">8%</output><input type="range" id="wingHinge" min="0" max="0.5" step="0.01" value="0.08" disabled></label>
 <button id="resetWings">Выпрямить крылья</button><div class="hint">Два крыла сгибаются у общего центрального крепления. 25–30° — рекомендуемый старт; точное положение на спине настраивается X/Y/Z. Изменяется геометрия самой детали и сохраняется при экспорте GLB. Костную анимацию крыла это не создаёт.</div>
 </div>
-<div class="coord-head">Положение относительно кости · метров</div>
-<div class="axis-grid"><div class="axis-row"><label for="pX">X — влево / вправо</label><button type="button" data-adjust="pX" data-delta="-0.05" aria-label="X — влево / вправо, уменьшить">−</button><input id="pX" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pX" data-delta="0.05" aria-label="X — влево / вправо, увеличить">+</button></div><div class="axis-row"><label for="pY">Y — вниз / вверх</label><button type="button" data-adjust="pY" data-delta="-0.05" aria-label="Y — вниз / вверх, уменьшить">−</button><input id="pY" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pY" data-delta="0.05" aria-label="Y — вниз / вверх, увеличить">+</button></div><div class="axis-row"><label for="pZ">Z — назад / вперёд</label><button type="button" data-adjust="pZ" data-delta="-0.05" aria-label="Z — назад / вперёд, уменьшить">−</button><input id="pZ" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pZ" data-delta="0.05" aria-label="Z — назад / вперёд, увеличить">+</button></div></div>
-<div class="coord-head">Поворот относительно кости · градусов</div>
-<div class="axis-grid"><div class="axis-row"><label for="rX">X — наклон</label><button type="button" data-adjust="rX" data-delta="-5" aria-label="X — наклон, уменьшить">−</button><input id="rX" type="number" step="5" value="0" inputmode="decimal"><button type="button" data-adjust="rX" data-delta="5" aria-label="X — наклон, увеличить">+</button></div><div class="axis-row"><label for="rY">Y — разворот</label><button type="button" data-adjust="rY" data-delta="-5" aria-label="Y — разворот, уменьшить">−</button><input id="rY" type="number" step="5" value="0" inputmode="decimal"><button type="button" data-adjust="rY" data-delta="5" aria-label="Y — разворот, увеличить">+</button></div><div class="axis-row"><label for="rZ">Z — крен</label><button type="button" data-adjust="rZ" data-delta="-5" aria-label="Z — крен, уменьшить">−</button><input id="rZ" type="number" step="5" value="0" inputmode="decimal"><button type="button" data-adjust="rZ" data-delta="5" aria-label="Z — крен, увеличить">+</button></div></div>
-<div class="reset-row"><button id="resetPosition">Сброс X/Y/Z</button><button id="resetRotation">Сброс поворота</button><button id="resetAll">Сброс всего</button></div>
-<div class="two"><button id="delPart">Удалить деталь</button><button id="togglePart">Скрыть/показать</button></div>
-</div></div><div class="hint">Деталь привязывается к кости и двигается вместе с ней. Для одежды с деформацией потребуется отдельная операция skin transfer.</div></section>
+
+</section>
 <section><h2>3 · Мимика / Blend Shapes</h2><div id="morphs" class="group"><span class="hint">Доступные ползунки появятся после импорта модели с Blend Shapes.</span></div></section>
 <section><h2>4 · Готовность аватара</h2><div id="metrics" class="metrics">Загрузите модель для проверки.</div><div class="hint">Это предварительная проверка. SDK, Eye View, Avatar Descriptor, PhysBones и лимиты PC/Quest проверяются в Unity.</div></section>
 <section><h2>5 · Сохранение и экспорт</h2><div class="two"><button id="saveJson">Настройки JSON</button><button id="exportGlb" class="primary">Сохранить GLB…</button></div><div class="hint">На Android открывается системный выбор места сохранения. JSON не содержит файлы моделей. GLB объединяет сцену, но не преобразует автоматически её в загружаемый VRChat-аватар.</div></section>

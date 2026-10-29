@@ -2,6 +2,16 @@
 
 Separate avatar-customization app derived from the workflow of Rig Animation Studio **v7.9**. Does not modify the original animation editor.
 
+## v0.6 — Wings editor stays visible
+
+- A permanent sidebar section **2A · Wing fold** shows even before a part is selected. No more disappearing "Fold back 25° / 30°" controls.
+- Its **Wing target** selector lists every imported accessory. An existing imported part can be converted to wings using **Assign selected detail as wings**, without re-import.
+- Converted wings are automatically re-anchored from head/other bones to the **back**.
+- If a GLB contains no vertices or is above the safe live deformation limit (100,000 wing vertices on mobile), the sidebar shows an explicit diagnostic instead of hiding the controls.
+- Preset buttons are disabled when unavailable, and enabled for a properly loaded wing mesh. Protects the Android tablet from accidental massive geometry operations.
+
+**Install:** v0.6 has a separate Android package ID. This corrects editor visibility, not VRChat SDK support or high-poly deformation performance.
+
 ## v0.5 — fold both wings around central attachment
 
 The Wing panel now includes one-tap **Fold backward 25°** and **Fold backward 30°**. This rotates each wing half in opposite directions around the shared center, yielding a V when viewed from above. The central anchor strip stays still so the wings can be positioned on the character's back.
