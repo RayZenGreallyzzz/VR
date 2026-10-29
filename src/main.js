@@ -95,7 +95,8 @@ async function loadBase(file){
 function selected(){return parts.find(p=>p.id===selection)||null;}
 function placePart(p){
  if(p.sourceSpan){
-  const safety=limitAccessoryScale(p.config.scale,p.sourceSpan,avatarHeight,p.config.type);
+  const sourceSpan=p.sourceSpan*(p.config.type==='wings'?Math.max(1,p.config.wingStretch):1);
+  const safety=limitAccessoryScale(p.config.scale,sourceSpan,avatarHeight,p.config.type);
   p.config.scale=safety.scale;
  }
  p.container.position.fromArray(p.config.position);
@@ -108,7 +109,7 @@ function readObjectTransform(p){
  p.config.scale=p.container.scale.x;
 }
 function updateScaleStatus(p,limited=false){
- const max=p.maxScale||4;
+ const max=p.sourceSpan?limitAccessoryScale(1,p.sourceSpan*(p.config.type==='wings'?Math.max(1,p.config.wingStretch):1),avatarHeight,p.config.type).maxScale:4;
  $('scaleStatus').textContent=limited
   ? '⚠️ Достигнут безопасный размер для персонажа: '+Math.round(max*100)/100+'×'
   : 'Безопасный максимум: '+Math.round(max*100)/100+'×. Размер меняется только через кнопку / явное подтверждение.';
@@ -276,7 +277,8 @@ function applyTypedTransform(){
 for(const id of ['pX','pY','pZ','rX','rY','rZ']) $(id).addEventListener('change',applyTypedTransform);
 function setIntentionalScale(value){
  const p=selected();if(!p)return;
- const {scale,limited}=limitAccessoryScale(value,p.sourceSpan,avatarHeight,p.config.type);
+ const span=p.sourceSpan*(p.config.type==='wings'?Math.max(1,p.config.wingStretch):1);
+ const {scale,limited}=limitAccessoryScale(value,span,avatarHeight,p.config.type);
  p.config.scale=scale;placePart(p);
  $('pScale').value=String(Math.round(scale*10000)/10000);
  updateScaleStatus(p,limited);
@@ -315,7 +317,7 @@ function resetTransform(what){
  const p=selected();if(!p)return;
  if(what==='position'||what==='all')p.config.position=[0,0,0];
  if(what==='rotation'||what==='all')p.config.rotation=[0,0,0];
- if(what==='all')p.config.scale=limitAccessoryScale(1,p.sourceSpan,avatarHeight,p.config.type).scale;
+ if(what==='all')p.config.scale=limitAccessoryScale(1,p.sourceSpan*(p.config.type==='wings'?Math.max(1,p.config.wingStretch):1),avatarHeight,p.config.type).scale;
  placePart(p);updateTransformFields(p);updateScaleStatus(p);
 }
 $('resetPosition').addEventListener('click',()=>resetTransform('position'));
