@@ -44,12 +44,14 @@ export function inspectAvatar(root) {
   result.warnings.push('Проверка Humanoid, Eye View, PhysBones и лимитов VRChat выполняется в Unity');
   return result;
 }
-export function makePartConfig({id,type='accessory',name='Detail',anchor,position=[0,0,0],rotation=[0,0,0],scale=1,visible=true}){
+export function makePartConfig({id,type='accessory',name='Detail',anchor,position=[0,0,0],rotation=[0,0,0],scale=1,visible=true,bendDegrees=0,wingStretch=1,hingeFraction=0.08}){
   if(!PART_TYPES.includes(type))throw new Error('Unknown part type');
-  return { id:String(id), type, name:String(name), anchor:anchor||PART_ANCHORS[type], position:position.map(Number), rotation:rotation.map(Number), scale:Number(scale), visible:Boolean(visible) };
+  return { id:String(id), type, name:String(name), anchor:anchor||PART_ANCHORS[type], position:position.map(Number), rotation:rotation.map(Number), scale:Number(scale), visible:Boolean(visible), bendDegrees:Number(bendDegrees),wingStretch:Number(wingStretch),hingeFraction:Number(hingeFraction) };
 }
 export function assertPartTransform(part){
   if(part.position.length!==3||part.rotation.length!==3||![...part.position,...part.rotation,part.scale].every(Number.isFinite)) throw new Error('Invalid part transform');
+  if(![part.bendDegrees,part.wingStretch,part.hingeFraction].every(Number.isFinite))throw new Error('Invalid wing transform');
+  if(part.wingStretch<=0||part.wingStretch>5||part.hingeFraction<0||part.hingeFraction>=1)throw new Error('Invalid wing bending settings');
   if(part.scale<=0||part.scale>50)throw new Error('Part scale outside safe range');
   return part;
 }

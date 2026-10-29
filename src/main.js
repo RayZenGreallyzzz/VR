@@ -4,6 +4,8 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportProjectMetadata} from './avatar-core.mjs';
+import {captureWingGeometry,deformWingGeometry} from './wing-geometry.mjs';
+import {saveOutput} from './save-output.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas=$('canvas');
@@ -40,11 +42,7 @@ transform.addEventListener('objectChange', ()=>{
 });
 const toast=message=>{$('toast').textContent=message;};
 const error=e=>{console.error(e);toast('Ошибка: '+(e?.message||String(e)));};
-const saveFile=(bytes,name,type)=>{
- const blob=bytes instanceof Blob?bytes:new Blob([bytes],{type});
- const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;
- document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
-};
+// Use the Android system document picker for save locations; browser fallback in save-output.mjs.
 const parseGLB=async file=>new Promise(async(resolve,reject)=>{
  try{loader.parse(await file.arrayBuffer(),'',resolve,reject);}catch(e){reject(e);}
 });
@@ -117,6 +115,31 @@ function setTransformMode(mode){
   $(id).setAttribute('aria-pressed',String(active));
  }
 }
+function syncWingSliders(p){
+ for(const [id,val,label] of [
+  ['wingBend',p.config.bendDegrees,'bendValue'],
+  ['wingStretch',p.config.wingStretch,'stretchValue'],
+  ['wingHinge',p.config.hingeFraction,'hingeValue']
+ ]){
+  $(id).value=String(val);
+  $(label).textContent=id==='wingBend'?val+'°':Math.round(val*100)+'%';
+ }
+}
+function updateWingDeformation(){
+ const p=selected();
+ if(!p?.wingSource)return;
+ p.config.bendDegrees=Number($('wingBend').value);
+ p.config.wingStretch=Number($('wingStretch').value);
+ p.config.hingeFraction=Number($('wingHinge').value);
+ deformWingGeometry(p.wingSource,p.config);
+ syncWingSliders(p);
+}
+for(const id of ['wingBend','wingStretch','wingHinge'])$(id).addEventListener('input',updateWingDeformation);
+$('resetWings').addEventListener('click',()=>{
+ const p=selected();if(!p?.wingSource)return;
+ p.config.bendDegrees=0;p.config.wingStretch=1;p.config.hingeFraction=.08;
+ deformWingGeometry(p.wingSource,p.config);syncWingSliders(p);
+});
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
  for(const p of parts){
@@ -127,6 +150,8 @@ function renderParts(){
  const p=selected();$('partEditor').hidden=!p;
  activateGizmo(p);
  if(p)updateTransformFields(p);
+ $('wingTools').hidden=!(p?.config.type==='wings'&&p?.wingSource);
+ if(p?.wingSource)syncWingSliders(p);
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
@@ -136,7 +161,13 @@ async function addPart(file){
  const container=new THREE.Group();container.name='Attachment:'+config.name;
  container.userData.avatarPart={id:config.id,type:kind,anchor};
  container.add(loaded.scene);(bone||base).add(container);
- const p={id:config.id,config,container};placePart(p);parts.push(p);selection=p.id;renderParts();
+ const p={id:config.id,config,container};
+ placePart(p);
+ if(kind==='wings'){
+  p.wingSource=captureWingGeometry(container);
+  if(!p.wingSource)toast('В модели крыльев не обнаружен меш для сгибания.');
+ }
+ parts.push(p);selection=p.id;renderParts();
  toast(bone?'Деталь закреплена на '+bone.name+'. Отрегулируй положение.':'Кость не найдена, деталь добавлена к корню модели.');
 }
 $('kind').addEventListener('change',()=>{$('anchor').value=PART_ANCHORS[$('kind').value]||'chest';});
@@ -200,19 +231,43 @@ $('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
 $('resetAll').addEventListener('click',()=>resetTransform('all'));
 $('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;transform.detach();p.container.parent?.remove(p.container);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
 $('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
-$('saveJson').addEventListener('click',()=>{
+$('saveJson').addEventListener('click',async()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
- saveFile(JSON.stringify(exportProjectMetadata(parts.map(p=>p.config),modelName),null,2),'phoenix-avatar-settings.json','application/json');
- toast('Настройки сохранены. Исходные файлы GLB храните отдельно.');
+ try{
+  const contents=JSON.stringify(exportProjectMetadata(parts.map(p=>p.config),modelName),null,2);
+  await saveOutput(contents,'phoenix-avatar-settings.json','application/json');
+  toast('Настройки сохранены в выбранную папку. Исходные GLB храните отдельно.');
+ }catch(e){
+  if(String(e).includes('SAVE_CANCELLED'))toast('Выбор папки отменён.');
+  else error(e);
+ }
 });
 $('exportGlb').addEventListener('click',async()=>{
  if(!base){toast('Сначала загрузите модель');return;}
- const btn=$('exportGlb');btn.disabled=true;toast('Экспорт GLB…');
+ const btn=$('exportGlb');btn.disabled=true;toast('Запекание добавленных деталей в GLB…');
  try{
-  const output=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{binary:true,onlyVisible:false,animations:clips}));
-  saveFile(output,'Phoenix_VR_Avatar.glb','model/gltf-binary');
-  toast('GLB экспортирован. Для VRChat потребуется Unity + VRChat SDK.');
- }catch(e){error(e)}finally{btn.disabled=false;}
+  // All attached accessory meshes belong to the avatar export hierarchy.
+  // Deformed wing geometry is already real BufferGeometry, not a shader effect.
+  const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
+   binary:true,onlyVisible:true,animations:clips
+  }));
+  const roundtrip=await new Promise((resolve,reject)=>loader.parse(exported,'',resolve,reject));
+  const expected=parts.filter(p=>p.config.visible).length;
+  let recovered=0;
+  roundtrip.scene.traverse(o=>{if(o.userData?.avatarPart?.id)recovered++;});
+  if(recovered<expected)throw new Error('Проверка запекания: найдено '+recovered+' деталей из '+expected+'. Сохранение отменено.');
+  const info=inspectAvatar(roundtrip.scene);
+  if(info.meshes<1)throw new Error('GLB после повторного открытия не содержит мешей.');
+  toast('Проверено: '+recovered+'/'+expected+' деталей внутри GLB. Выбери папку…');
+  await saveOutput(exported,'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
+   if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
+  });
+  toast('GLB сохранён: '+info.meshes+' мешей, '+recovered+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
+  dispose(roundtrip.scene);
+ }catch(e){
+  if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
+  else error(e);
+ }finally{btn.disabled=false;}
 });
 window.addEventListener('dragover',e=>e.preventDefault());
 window.addEventListener('drop',async e=>{e.preventDefault();const f=[...(e.dataTransfer?.files||[])].find(f=>f.name.toLowerCase().endsWith('.glb'));if(f)try{await loadBase(f)}catch(err){error(err)}});
