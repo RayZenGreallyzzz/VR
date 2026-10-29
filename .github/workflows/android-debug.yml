@@ -1,0 +1,30 @@
+name: Android debug APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install dependencies
+        run: npm install
+      - name: Test and bundle
+        run: npm test && npm run build
+      - name: Create Android platform
+        run: npx cap add android
+      - name: Build APK
+        run: npm run android:apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix-VR-Avatar-Studio-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
