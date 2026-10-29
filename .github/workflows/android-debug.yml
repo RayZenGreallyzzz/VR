@@ -17,7 +17,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - name: Check Android SDK
+        run: test -d "$ANDROID_HOME/platforms" && echo "SDK: $ANDROID_HOME" && ls "$ANDROID_HOME/platforms"
       - name: Install dependencies
         run: npm install
       - name: Test and bundle
