@@ -15,8 +15,8 @@ export function parseScaleText(input){
  return n;
 }
 export function defaultAnchorPoint(box,anchor='back'){
- const center=box.getCenter();
- const size=box.getSize();
+ const center={x:(box.min.x+box.max.x)/2,z:(box.min.z+box.max.z)/2};
+ const size={y:box.max.y-box.min.y};
  const y={head:.9,neck:.81,chest:.72,back:.70,hips:.48}[anchor]??.70;
  return {x:center.x,y:box.min.y+size.y*y,z:center.z};
 }
