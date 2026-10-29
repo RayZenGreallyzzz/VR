@@ -210,6 +210,28 @@ $('resetWings').addEventListener('click',()=>{
  p.config.wingCenterOffset=0;p.config.wingSpanAxis='auto';p.config.wingFoldDirection=-1;
  queueWingDeformation(p);syncWingSliders(p);lockWings();
 });
+function movePartToBack(p){
+ if(!base||p.config.anchor==='back')return;
+ // Re-anchoring a detail previously imported as hair/other makes wings
+ // actually sit on the back rather than stay parented to a head bone.
+ if(p.fallback){p.fallback.parent?.remove(p.fallback);p.fallback=null;}
+ let back=selectAnchorBone(base,'back');
+ if(!back){
+  back=new THREE.Group();
+  back.name='AvatarAnchor:back';
+  const pos=defaultAnchorPoint(baseBoundingBox,'back');
+  base.add(back);
+  base.updateWorldMatrix(true,true);
+  back.position.copy(base.worldToLocal(new THREE.Vector3(pos.x,pos.y,pos.z)));
+  p.fallback=back;
+ }
+ back.add(p.container);
+ p.config.anchor='back';
+ p.container.userData.avatarPart.anchor='back';
+ p.config.position=[0,0,0];
+ p.config.rotation=[0,0,0];
+ placePart(p);
+}
 function assignPartAsWings(p){
  if(!p)return false;
  if(p.wingSource)return true;
@@ -227,6 +249,7 @@ function assignPartAsWings(p){
    p.config.type='wings';
    p.container.userData.avatarPart.type='wings';
    p.maxScale=limitAccessoryScale(1,p.sourceSpan,avatarHeight,'wings').maxScale;
+   movePartToBack(p);
    placePart(p);
   }
   return !!p.wingSource;
