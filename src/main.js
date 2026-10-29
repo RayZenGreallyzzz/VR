@@ -143,16 +143,45 @@ function syncWingSliders(p){
   $(label).textContent=id==='wingBend'?val+'°':Math.round(val*100)+'%';
  }
 }
+const wingInputs=['wingBend','wingStretch','wingHinge'];
+let wingLockTimer=null,wingFrame=0,pendingWing=null;
+function lockWings(){
+ clearTimeout(wingLockTimer);
+ for(const id of wingInputs)$(id).disabled=true;
+ $('wingUnlock').textContent='🔒 Разблокировать ползунки крыльев';
+}
+function unlockWings(){
+ if(!selected()?.wingSource)return;
+ for(const id of wingInputs)$(id).disabled=false;
+ $('wingUnlock').textContent='🔓 Заблокировать ползунки';
+ clearTimeout(wingLockTimer);
+ wingLockTimer=setTimeout(lockWings,12000);
+}
+$('wingUnlock').addEventListener('click',()=>wingInputs.some(id=>$(id).disabled)?unlockWings():lockWings());
 function updateWingDeformation(){
  const p=selected();
  if(!p?.wingSource)return;
  p.config.bendDegrees=Number($('wingBend').value);
- p.config.wingStretch=Number($('wingStretch').value);
+ const requestedStretch=Number($('wingStretch').value);
+ const safeStretch=Math.max(.01,Math.min(requestedStretch,p.maxScale/p.config.scale,1.8));
+ p.config.wingStretch=safeStretch;
  p.config.hingeFraction=Number($('wingHinge').value);
- deformWingGeometry(p.wingSource,p.config);
  syncWingSliders(p);
+ pendingWing=p;
+ if(!wingFrame){
+  wingFrame=requestAnimationFrame(()=>{
+   wingFrame=0;
+   const target=pendingWing;pendingWing=null;
+   if(target?.wingSource&&parts.includes(target)){
+    try{deformWingGeometry(target.wingSource,target.config);}
+    catch(e){error(e);lockWings();}
+   }
+  });
+ }
+ clearTimeout(wingLockTimer);wingLockTimer=setTimeout(lockWings,12000);
 }
-for(const id of ['wingBend','wingStretch','wingHinge'])$(id).addEventListener('input',updateWingDeformation);
+for(const id of wingInputs)$(id).addEventListener('input',updateWingDeformation);
+document.querySelector('.sidebar').addEventListener('scroll',lockWings,{passive:true});
 $('resetWings').addEventListener('click',()=>{
  const p=selected();if(!p?.wingSource)return;
  p.config.bendDegrees=0;p.config.wingStretch=1;p.config.hingeFraction=.08;
@@ -170,6 +199,7 @@ function renderParts(){
  if(p)updateScaleStatus(p);
  if(p)updateTransformFields(p);
  $('wingTools').hidden=!(p?.config.type==='wings'&&p?.wingSource);
+ lockWings();
  if(p?.wingSource)syncWingSliders(p);
 }
 async function addPart(file){
