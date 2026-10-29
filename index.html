@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.4 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.5 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
@@ -32,12 +32,20 @@
  <button id="scalePlus" type="button">+</button><button id="scaleApply" class="primary" type="button">Применить</button></div>
  <div class="hint" id="scaleStatus">Масштаб меняется только кнопками или после «Применить». Прокрутка панели его не меняет.</div>
  </div><div id="wingTools" class="group" hidden>
-<div class="coord-head">🪽 Деформация крыльев (изменяет вершины меша)</div><button type="button" id="wingUnlock">🔒 Разблокировать ползунки крыльев</button>
+<div class="coord-head">🪽 Сгиб двух крыльев у основания — вид сверху как V</div>
+<div class="two"><button id="fold25" type="button" class="primary">Сложить назад 25°</button><button id="fold30" type="button" class="primary">Сложить назад 30°</button></div>
+<div class="two">
+<label>Ось размаха крыльев<select id="wingAxis"><option value="auto">Авто (по длине)</option><option value="x">X · горизонтально</option><option value="y">Y · вертикально</option><option value="z">Z · вдоль глубины</option></select></label>
+<label>Направление сгиба<select id="wingDirection"><option value="-1">Назад (−)</option><option value="1">Вперёд (+)</option></select></label>
+</div>
+<div class="hint" id="axisHint">Крылья изгибаются симметрично от общего центра; при неправильном направлении поменяй «Назад/Вперёд».</div>
+<button type="button" id="wingUnlock">🔒 Разблокировать ползунки крыльев</button>
 <div class="hint">При прокрутке меню ползунки заблокированы. Нажми кнопку, чтобы настроить сгиб, затем управление снова заблокируется.</div>
 <label>Согнуть половины назад / вперёд <output id="bendValue">0°</output><input type="range" id="wingBend" min="-100" max="100" step="1" value="0" disabled></label>
 <label>Вытянуть крылья <output id="stretchValue">100%</output><input type="range" id="wingStretch" min="0.65" max="1.8" step="0.01" value="1" disabled></label>
-<label>Место сгиба от центра <output id="hingeValue">8%</output><input type="range" id="wingHinge" min="0" max="0.5" step="0.01" value="0.08" disabled></label>
-<button id="resetWings">Выпрямить крылья</button><div class="hint">Сгиб в центре каждой половины, вытяжка внешней части. Изменяется геометрия самой детали и сохраняется при экспорте GLB. Костную анимацию крыла это не создаёт.</div>
+<label>Сместить центр между крыльями <output id="centerValue">0%</output><input type="range" id="wingCenter" min="-0.5" max="0.5" step="0.01" value="0" disabled></label>
+<label>Неподвижная полоска у основания <output id="hingeValue">8%</output><input type="range" id="wingHinge" min="0" max="0.5" step="0.01" value="0.08" disabled></label>
+<button id="resetWings">Выпрямить крылья</button><div class="hint">Два крыла сгибаются у общего центрального крепления. 25–30° — рекомендуемый старт; точное положение на спине настраивается X/Y/Z. Изменяется геометрия самой детали и сохраняется при экспорте GLB. Костную анимацию крыла это не создаёт.</div>
 </div>
 <div class="coord-head">Положение относительно кости · метров</div>
 <div class="axis-grid"><div class="axis-row"><label for="pX">X — влево / вправо</label><button type="button" data-adjust="pX" data-delta="-0.05" aria-label="X — влево / вправо, уменьшить">−</button><input id="pX" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pX" data-delta="0.05" aria-label="X — влево / вправо, увеличить">+</button></div><div class="axis-row"><label for="pY">Y — вниз / вверх</label><button type="button" data-adjust="pY" data-delta="-0.05" aria-label="Y — вниз / вверх, уменьшить">−</button><input id="pY" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pY" data-delta="0.05" aria-label="Y — вниз / вверх, увеличить">+</button></div><div class="axis-row"><label for="pZ">Z — назад / вперёд</label><button type="button" data-adjust="pZ" data-delta="-0.05" aria-label="Z — назад / вперёд, уменьшить">−</button><input id="pZ" type="number" step="0.05" value="0" inputmode="decimal"><button type="button" data-adjust="pZ" data-delta="0.05" aria-label="Z — назад / вперёд, увеличить">+</button></div></div>
