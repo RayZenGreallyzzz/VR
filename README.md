@@ -2,6 +2,14 @@
 
 Separate avatar-customization app derived from the workflow of Rig Animation Studio **v7.9**. Does not modify the original animation editor.
 
+## v0.5 — fold both wings around central attachment
+
+The Wing panel now includes one-tap **Fold backward 25°** and **Fold backward 30°**. This rotates each wing half in opposite directions around the shared center, yielding a V when viewed from above. The central anchor strip stays still so the wings can be positioned on the character's back.
+
+If the source GLB is oriented unusually, switch **Wing span axis** between Auto/X/Y/Z and reverse fold direction. The center can be moved left or right to match asymmetrical wing assets. The last bend direction, axis, center offset and 25°/30° angle are persisted in project JSON.
+
+The fold modifies the wing **mesh vertices** and is present in exported GLB. It does not create animated wing bones or skin weights. As before, dense wing meshes may be too heavy for interactive mesh deformation on a 4 GB tablet; v0.4 safety guards remain enabled.
+
 ## v0.4 — Android touch crash prevention
 
 - Scale control is now **explicit**: `− / +` or type a number and press `Применить`. Scrolling the menu cannot drag a scale slider.

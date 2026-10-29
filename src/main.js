@@ -4,7 +4,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportProjectMetadata} from './avatar-core.mjs';
-import {captureWingGeometry,deformWingGeometry} from './wing-geometry.mjs';
+import {captureWingGeometry,deformWingGeometry,detectWingSpanAxis} from './wing-geometry.mjs';
 import {saveOutput} from './save-output.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES} from './placement-safety.mjs';
 
@@ -139,13 +139,18 @@ function syncWingSliders(p){
  for(const [id,val,label] of [
   ['wingBend',p.config.bendDegrees,'bendValue'],
   ['wingStretch',p.config.wingStretch,'stretchValue'],
-  ['wingHinge',p.config.hingeFraction,'hingeValue']
+  ['wingHinge',p.config.hingeFraction,'hingeValue'],
+  ['wingCenter',p.config.wingCenterOffset,'centerValue']
  ]){
   $(id).value=String(val);
   $(label).textContent=id==='wingBend'?val+'°':Math.round(val*100)+'%';
  }
+ $('wingAxis').value=p.config.wingSpanAxis;
+ $('wingDirection').value=String(p.config.wingFoldDirection);
+ const detected=detectWingSpanAxis(p.wingSource,p.config.wingSpanAxis).toUpperCase();
+ $('axisHint').textContent='Текущая ось размаха: '+detected+'. Если два крыла гнутся неправильно, выбери другую ось; смена направления разворачивает изгиб.';
 }
-const wingInputs=['wingBend','wingStretch','wingHinge'];
+const wingInputs=['wingBend','wingStretch','wingHinge','wingCenter'];
 let wingLockTimer=null,wingFrame=0,pendingWing=null;
 function lockWings(){
  clearTimeout(wingLockTimer);
@@ -160,15 +165,7 @@ function unlockWings(){
  wingLockTimer=setTimeout(lockWings,12000);
 }
 $('wingUnlock').addEventListener('click',()=>wingInputs.some(id=>$(id).disabled)?unlockWings():lockWings());
-function updateWingDeformation(){
- const p=selected();
- if(!p?.wingSource)return;
- p.config.bendDegrees=Number($('wingBend').value);
- const requestedStretch=Number($('wingStretch').value);
- const safeStretch=Math.max(.01,Math.min(requestedStretch,p.maxScale/p.config.scale,1.8));
- p.config.wingStretch=safeStretch;
- p.config.hingeFraction=Number($('wingHinge').value);
- syncWingSliders(p);
+function queueWingDeformation(p){
  pendingWing=p;
  if(!wingFrame){
   wingFrame=requestAnimationFrame(()=>{
@@ -180,14 +177,38 @@ function updateWingDeformation(){
    }
   });
  }
+}
+function updateWingDeformation(){
+ const p=selected();
+ if(!p?.wingSource)return;
+ p.config.bendDegrees=Number($('wingBend').value);
+ const requestedStretch=Number($('wingStretch').value);
+ p.config.wingStretch=Math.max(.01,Math.min(requestedStretch,p.maxScale/p.config.scale,1.8));
+ p.config.hingeFraction=Number($('wingHinge').value);
+ p.config.wingCenterOffset=Number($('wingCenter').value);
+ p.config.wingSpanAxis=$('wingAxis').value;
+ p.config.wingFoldDirection=Number($('wingDirection').value);
+ syncWingSliders(p);queueWingDeformation(p);
  clearTimeout(wingLockTimer);wingLockTimer=setTimeout(lockWings,12000);
 }
 for(const id of wingInputs)$(id).addEventListener('input',updateWingDeformation);
+for(const id of ['wingAxis','wingDirection'])$(id).addEventListener('change',updateWingDeformation);
 document.querySelector('.sidebar').addEventListener('scroll',lockWings,{passive:true});
+for(const [id,angle] of [['fold25',25],['fold30',30]]){
+ $(id).addEventListener('click',()=>{
+  const p=selected();if(!p?.wingSource)return;
+  p.config.bendDegrees=angle;
+  p.config.wingFoldDirection=-1;
+  syncWingSliders(p);
+  queueWingDeformation(p);
+  toast('Обе половины крыла сложены назад на '+angle+'° у центра. При необходимости сдвинь центр или поменяй ось.');
+ });
+}
 $('resetWings').addEventListener('click',()=>{
  const p=selected();if(!p?.wingSource)return;
  p.config.bendDegrees=0;p.config.wingStretch=1;p.config.hingeFraction=.08;
- deformWingGeometry(p.wingSource,p.config);syncWingSliders(p);
+ p.config.wingCenterOffset=0;p.config.wingSpanAxis='auto';p.config.wingFoldDirection=-1;
+ queueWingDeformation(p);syncWingSliders(p);lockWings();
 });
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
