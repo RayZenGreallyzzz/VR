@@ -6,11 +6,12 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportProjectMetadata} from './avatar-core.mjs';
 import {captureWingGeometry,deformWingGeometry} from './wing-geometry.mjs';
 import {saveOutput} from './save-output.mjs';
+import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas=$('canvas');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,/Android|iPhone|iPad/i.test(navigator.userAgent)?1:1.5));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 const scene=new THREE.Scene();
@@ -24,7 +25,7 @@ const rim=new THREE.DirectionalLight(0xb1a5ff,2);rim.position.set(-4,3,-2);scene
 const grid=new THREE.GridHelper(12,24,0x57586a,0x2e3342);grid.position.y=-.012;scene.add(grid);
 const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
-let base=null,modelName='',clips=[],parts=[],selection=null,serial=0;
+let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1;
 const transform=new TransformControls(camera,renderer.domElement);
 transform.setMode('translate');
 transform.setSpace('local');
@@ -49,7 +50,12 @@ const parseGLB=async file=>new Promise(async(resolve,reject)=>{
 const dispose=o=>o?.traverse?.(child=>{child.geometry?.dispose?.();for(const m of (Array.isArray(child.material)?child.material:[child.material||null]))m?.dispose?.();});
 function resize(){const w=canvas.clientWidth||1,h=canvas.clientHeight||1;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 new ResizeObserver(resize).observe(canvas);resize();
-renderer.setAnimationLoop(()=>{orbit.update();renderer.render(scene,camera);});
+let lastFrameTime=0;
+renderer.setAnimationLoop((time)=>{
+ if(document.hidden||time-lastFrameTime<33) return;
+ lastFrameTime=time;
+ orbit.update();renderer.render(scene,camera);
+});
 function centerView(){
  if(!base)return;const box=new THREE.Box3().setFromObject(base);if(box.isEmpty())return;
  const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
@@ -80,11 +86,17 @@ async function loadBase(file){
  parts=[];selection=null;
  if(base){avatar.remove(base);dispose(base);}
  base=gltf.scene;base.name='BaseAvatar';avatar.add(base);modelName=file.name||'avatar.glb';clips=gltf.animations||[];
+ const avatarBox=new THREE.Box3().setFromObject(base);
+ avatarHeight=Math.max(.1,avatarBox.getSize(new THREE.Vector3()).y);
  centerView();writeMetrics();writeMorphs();renderParts();
  toast('Модель загружена: '+modelName+'. Можно добавлять волосы и аксессуары.');
 }
 function selected(){return parts.find(p=>p.id===selection)||null;}
 function placePart(p){
+ if(p.sourceSpan){
+  const safety=limitAccessoryScale(p.config.scale,p.sourceSpan,avatarHeight,p.config.type);
+  p.config.scale=safety.scale;
+ }
  p.container.position.fromArray(p.config.position);
  p.container.rotation.set(...p.config.rotation.map(THREE.MathUtils.degToRad));
  p.container.scale.setScalar(p.config.scale);p.container.visible=p.config.visible;
@@ -93,6 +105,12 @@ function readObjectTransform(p){
  p.config.position=p.container.position.toArray();
  p.config.rotation=[p.container.rotation.x,p.container.rotation.y,p.container.rotation.z].map(THREE.MathUtils.radToDeg);
  p.config.scale=p.container.scale.x;
+}
+function updateScaleStatus(p,limited=false){
+ const max=p.maxScale||4;
+ $('scaleStatus').textContent=limited
+  ? '⚠️ Достигнут безопасный размер для персонажа: '+Math.round(max*100)/100+'×'
+  : 'Безопасный максимум: '+Math.round(max*100)/100+'×. Размер меняется только через кнопку / явное подтверждение.';
 }
 function updateTransformFields(p){
  const values={pScale:p.config.scale,pX:p.config.position[0],pY:p.config.position[1],pZ:p.config.position[2],rX:p.config.rotation[0],rY:p.config.rotation[1],rZ:p.config.rotation[2]};
@@ -149,6 +167,7 @@ function renderParts(){
  }
  const p=selected();$('partEditor').hidden=!p;
  activateGizmo(p);
+ if(p)updateScaleStatus(p);
  if(p)updateTransformFields(p);
  $('wingTools').hidden=!(p?.config.type==='wings'&&p?.wingSource);
  if(p?.wingSource)syncWingSliders(p);
@@ -157,18 +176,43 @@ async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
  const kind=$('kind').value,anchor=$('anchor').value,loaded=await parseGLB(file);
  const config=makePartConfig({id:'part-'+(++serial),name:file.name,type:kind,anchor});
+ const initialBox=new THREE.Box3().setFromObject(loaded.scene);
+ if(initialBox.isEmpty())throw new Error('В файле детали нет видимой геометрии.');
+ const size=initialBox.getSize(new THREE.Vector3());
+ const sourceSpan=Math.max(size.x,size.y,size.z,0.000001);
+ const sizeLimit=limitAccessoryScale(1,sourceSpan,avatarHeight,kind);
+ config.scale=sizeLimit.scale;
  const bone=selectAnchorBone(base,anchor);
  const container=new THREE.Group();container.name='Attachment:'+config.name;
  container.userData.avatarPart={id:config.id,type:kind,anchor};
- container.add(loaded.scene);(bone||base).add(container);
- const p={id:config.id,config,container};
+ container.add(loaded.scene);
+ let fallback=null;
+ if(bone)bone.add(container);
+ else {
+  fallback=new THREE.Group();fallback.name='AvatarAnchor:'+anchor;
+  const box=new THREE.Box3().setFromObject(base);
+  const pos=defaultAnchorPoint(box,anchor);
+  base.add(fallback);
+  base.updateWorldMatrix(true,true);
+  const point=base.worldToLocal(new THREE.Vector3(pos.x,pos.y,pos.z));
+  fallback.position.copy(point);
+  fallback.add(container);
+ }
+ const p={id:config.id,config,container,sourceSpan,maxScale:sizeLimit.maxScale,fallback};
  placePart(p);
  if(kind==='wings'){
-  p.wingSource=captureWingGeometry(container);
-  if(!p.wingSource)toast('В модели крыльев не обнаружен меш для сгибания.');
+  let totalVertices=0;
+  container.traverse(o=>{if(o.isMesh)totalVertices+=o.geometry?.getAttribute('position')?.count||0;});
+  if(totalVertices>MAX_WING_VERTICES){
+   toast('Слишком тяжёлые крылья для деформации ('+totalVertices+' вершин). Можно двигать и вращать, но сгибание выключено.');
+  } else {
+   p.wingSource=captureWingGeometry(container);
+   if(!p.wingSource)toast('В модели крыльев не обнаружен меш для сгибания.');
+  }
  }
  parts.push(p);selection=p.id;renderParts();
- toast(bone?'Деталь закреплена на '+bone.name+'. Отрегулируй положение.':'Кость не найдена, деталь добавлена к корню модели.');
+ toast(bone?'Деталь на кости '+bone.name+'. Масштаб ограничен безопасным пределом.':
+  'Кость '+anchor+' не найдена: использована фиксированная точка крепления '+anchor+' на теле (без скелета).');
 }
 $('kind').addEventListener('change',()=>{$('anchor').value=PART_ANCHORS[$('kind').value]||'chest';});
 $('baseFile').addEventListener('change',async e=>{const f=e.target.files?.[0];if(f)try{await loadBase(f);}catch(err){error(err)}e.target.value='';});
@@ -194,13 +238,31 @@ $('fit').addEventListener('click',centerView);
 function applyTypedTransform(){
  const p=selected();if(!p)return;
  const read=id=>Number.parseFloat($(id).value);
- const pos=['pX','pY','pZ'].map(read),rot=['rX','rY','rZ'].map(read),scale=read('pScale');
- if(![...pos,...rot,scale].every(Number.isFinite)||scale<=0){toast('Нужны корректные числа и положительный масштаб.');return;}
- p.config.position=pos;p.config.rotation=rot;p.config.scale=scale;
+ const pos=['pX','pY','pZ'].map(read),rot=['rX','rY','rZ'].map(read);
+ if(![...pos,...rot].every(Number.isFinite)){toast('Нужны корректные координаты.');return;}
+ p.config.position=pos;p.config.rotation=rot;
  placePart(p);
 }
 for(const id of ['pX','pY','pZ','rX','rY','rZ']) $(id).addEventListener('change',applyTypedTransform);
-$('pScale').addEventListener('input',applyTypedTransform);
+function setIntentionalScale(value){
+ const p=selected();if(!p)return;
+ const {scale,limited}=limitAccessoryScale(value,p.sourceSpan,avatarHeight,p.config.type);
+ p.config.scale=scale;placePart(p);
+ $('pScale').value=String(Math.round(scale*10000)/10000);
+ updateScaleStatus(p,limited);
+}
+$('scaleApply').addEventListener('click',()=>{
+ try{setIntentionalScale(parseScaleText($('pScale').value));}
+ catch(e){toast(e.message);$('pScale').value=String(selected()?.config.scale||1);}
+});
+$('pScale').addEventListener('keydown',e=>{if(e.key==='Enter'){$('scaleApply').click();$('pScale').blur();}});
+for(const [id,sign] of [['scaleMinus',-1],['scalePlus',1]]){
+ $(id).addEventListener('click',()=>{
+  const p=selected();if(!p)return;
+  const next=Math.max(.00001,p.config.scale+sign*.05);
+  setIntentionalScale(next);
+ });
+}
 for(const button of document.querySelectorAll('[data-adjust]')){
  button.addEventListener('click',()=>{
   const input=$(button.dataset.adjust);
@@ -223,13 +285,13 @@ function resetTransform(what){
  const p=selected();if(!p)return;
  if(what==='position'||what==='all')p.config.position=[0,0,0];
  if(what==='rotation'||what==='all')p.config.rotation=[0,0,0];
- if(what==='all')p.config.scale=1;
- placePart(p);updateTransformFields(p);
+ if(what==='all')p.config.scale=limitAccessoryScale(1,p.sourceSpan,avatarHeight,p.config.type).scale;
+ placePart(p);updateTransformFields(p);updateScaleStatus(p);
 }
 $('resetPosition').addEventListener('click',()=>resetTransform('position'));
 $('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
 $('resetAll').addEventListener('click',()=>resetTransform('all'));
-$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;transform.detach();p.container.parent?.remove(p.container);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
+$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
 $('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
 $('saveJson').addEventListener('click',async()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
