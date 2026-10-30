@@ -152,7 +152,9 @@ function recoverParts(project){
    p.tailVertices=countPartVertices(container);
    p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
   }
-  // Do not reapply transforms: these nodes already store exported positions/rotation.
+  // Exported transform nodes already carry their positions and rotations.
+  // Restore visibility explicitly because standard glTF node visibility is not persistent.
+  container.visible=record.visible;
   parts.push(p);
  }
  serial=Math.max(serial,...parts.map(p=>Number(p.id.match(/^part-(\d+)$/)?.[1])||0),0);
