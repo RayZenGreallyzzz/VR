@@ -1,3 +1,14 @@
+## v1.1 — Put clothes on effortlessly + pull skirt hem outward
+
+1. Load the avatar (a skinned or ordinary GLB mesh) and import your GLB clothing using the **👕 Одежда** type.
+2. In **2В · Одежда без заморочек**, choose the character body mesh and style (dress / skirt / top); tap **✨ Авто-подгонка по телу**. The editor adjusts proportional garment size and location, and gently draws nearby garment vertices toward the body surface with controlled clearance. For dresses/skirts, lower-body volume is protected.
+3. For a puffier skirt, show the **yellow hem drag handle**, or drag the clothing edge near its bottom in the 3D viewport. Push out to expand, pull in to narrow. Precise `−/+` and multiplier inputs range 0.7–3.0. The upper garment/waist does not expand, and source UV coordinates remain unchanged.
+4. Save editable GLB, or, **after** fitting and flaring, optionally perform clothing weight transfer on a rigged character, test shoulder/knee poses, and export.
+
+The hem tool recomputes from an immutable geometry snapshot; repeated edits do not accumulate errors. Geometry is baked in the exported GLB. As with other prototype sculpting tools, undo/redo applies to hem width changes within the current session; the initial auto-fit operation is not yet undoable as a single geometry transaction. Re-importing the exported GLB uses the baked shape as the new baseline. Do the surface fit before adding skin weights.
+
+**Limitations:** auto-fit is controlled nearest-surface wrapping, not full cloth simulation or guaranteed one-click fitting for every costume. Highly unusual silhouettes, long loose sleeves, multi-layer armor, and asymmetrical meshes can need manual adjustment. Skirt flare assumes Y-up garment geometry with an identifiable hem. Android 15 real-device verification remains necessary.
+
 ## v1.0 — Clothing skin-weight transfer (beta)
 
 - **Import GLB as "👕 Одежда"** and fit it to a **rigged** base avatar in rest A/T pose using XYZ, rotation and scale.
