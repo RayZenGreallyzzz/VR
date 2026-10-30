@@ -116,8 +116,47 @@ async function loadBase(file){
  const avatarBox=new THREE.Box3().setFromObject(base);
  avatarHeight=Math.max(.1,avatarBox.getSize(new THREE.Vector3()).y);
  baseBoundingBox=avatarBox.clone();
+ const saved=readEmbeddedProject(base);
+ if(saved)recoverParts(saved);
+ history.clear();recordEdit();
  centerView();writeMetrics();writeMorphs();renderParts();
- toast('Модель загружена: '+modelName+'. Можно добавлять волосы и аксессуары.');
+ toast(saved?'✅ Проект открыт: '+parts.length+' деталей; геометрия и слои восстановлены.':'Модель загружена: '+modelName+'. Можно добавлять волосы и аксессуары.');
+}
+function recoverParts(project){
+ const found=new Map();
+ base.traverse(o=>{
+  const id=o.userData?.avatarPart?.id;
+  if(typeof id==='string')found.set(id,o);
+ });
+ for(const record of project.attachments){
+  const container=found.get(record.id);
+  if(!container)continue;
+  const bounds=new THREE.Box3().setFromObject(container);
+  const size=bounds.getSize(new THREE.Vector3());
+  const sourceSpan=Math.max(size.x,size.y,size.z,.000001)/Math.max(record.scale,.000001);
+  const p={id:record.id,config:record,container,sourceSpan,
+   maxScale:limitAccessoryScale(1,sourceSpan,avatarHeight,record.type).maxScale,
+   fallback:null};
+  if(record.type==='wings'){
+   p.wingVertices=countPartVertices(container);
+   const alreadySkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
+   if(alreadySkinned){
+    p.wingProblem='В загруженных крыльях уже есть кости. Сгиб и авториг поверх существующего скелета отключены; анимации GLB сохранены.';
+   }else if(p.wingVertices<=MAX_WING_VERTICES){
+    p.wingSource=captureWingGeometry(container);
+    // The GLB contains already-baked geometry; avoid bending it a second time.
+    p.config.bendDegrees=0;p.config.wingStretch=1;
+    p.config.wingCenterOffset=0;
+   }
+  }else if(record.type==='tail'){
+   p.tailVertices=countPartVertices(container);
+   p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
+  }
+  // Do not reapply transforms: these nodes already store exported positions/rotation.
+  parts.push(p);
+ }
+ serial=Math.max(serial,...parts.map(p=>Number(p.id.match(/^part-(\d+)$/)?.[1])||0),0);
+ selection=parts[0]?.id||null;
 }
 function selected(){return parts.find(p=>p.id===selection)||null;}
 function placePart(p){
@@ -236,7 +275,7 @@ function updateWingDeformation(){
  p.config.wingCenterOffset=Number($('wingCenter').value);
  p.config.wingSpanAxis=$('wingAxis').value;
  p.config.wingFoldDirection=Number($('wingDirection').value);
- syncWingSliders(p);queueWingDeformation(p);
+ syncWingSliders(p);queueWingDeformation(p);recordEdit();
  clearTimeout(wingLockTimer);wingLockTimer=setTimeout(lockWings,12000);
 }
 for(const id of wingInputs)$(id).addEventListener('input',updateWingDeformation);
@@ -248,7 +287,7 @@ for(const [id,angle] of [['fold25',25],['fold30',30]]){
   p.config.bendDegrees=angle;
   p.config.wingFoldDirection=-1;
   syncWingSliders(p);
-  queueWingDeformation(p);
+  queueWingDeformation(p);recordEdit();
   toast('Обе половины крыла сложены назад на '+angle+'° у центра. При необходимости сдвинь центр или поменяй ось.');
  });
 }
@@ -256,7 +295,7 @@ $('resetWings').addEventListener('click',()=>{
  const p=selected();if(!p?.wingSource)return;
  p.config.bendDegrees=0;p.config.wingStretch=1;p.config.hingeFraction=.08;
  p.config.wingCenterOffset=0;p.config.wingSpanAxis='auto';p.config.wingFoldDirection=-1;
- queueWingDeformation(p);syncWingSliders(p);lockWings();
+ queueWingDeformation(p);syncWingSliders(p);lockWings();recordEdit();
 });
 const MAX_RIG_VERTICES=250_000;
 function updateRigPanel(p){
