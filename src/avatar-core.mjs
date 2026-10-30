@@ -2,7 +2,7 @@
  * Independent, testable avatar metadata and inspection helpers.
  * Does not claim Unity / VRChat SDK validation: that check belongs to Unity.
  */
-export const PART_TYPES = Object.freeze(['hair', 'ears', 'horns', 'tail', 'wings', 'glasses', 'hat', 'accessory']);
+export const PART_TYPES = Object.freeze(['hair', 'ears', 'horns', 'tail', 'wings', 'glasses', 'hat', 'clothing', 'accessory']);
 export const ANCHORS = Object.freeze({
   head: [/^(head)$/i,/head$/i,/mixamorig:head/i],
   neck: [/^neck/i,/neck$/i],
@@ -10,7 +10,7 @@ export const ANCHORS = Object.freeze({
   hips: [/hips/i,/pelvis/i],
   back: [/chest/i,/spine2/i,/spine1/i]
 });
-export const PART_ANCHORS = Object.freeze({ hair:'head', ears:'head', horns:'head', glasses:'head', hat:'head', tail:'hips', wings:'back', accessory:'chest' });
+export const PART_ANCHORS = Object.freeze({ hair:'head', ears:'head', horns:'head', glasses:'head', hat:'head', tail:'hips', wings:'back', clothing:'chest', accessory:'chest' });
 
 export function selectAnchorBone(root, anchor='head') {
   if (!root?.traverse) return null;

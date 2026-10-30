@@ -13,11 +13,11 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.9 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v1.0 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
-<section><h2>2 · Волосы, уши и аксессуары</h2><div class="two"><label>Тип<select id="kind"><option value="hair">Волосы</option><option value="ears">Уши</option><option value="horns">Рога</option><option value="tail">Хвост</option><option value="wings">Крылья</option><option value="glasses">Очки</option><option value="hat">Головной убор</option><option value="accessory">Аксессуар</option></select></label><label>Кость<select id="anchor"><option value="head">Голова</option><option value="neck">Шея</option><option value="chest">Грудь</option><option value="back">Спина</option><option value="hips">Таз</option></select></label></div><label>Загрузить деталь GLB<input id="partFile" type="file" accept=".glb,model/gltf-binary"></label><button id="goWings" type="button" class="primary" style="text-align:center">🪽 Согнуть крылья 25° / 30° ↓</button><div id="partsPanel" hidden><div class="list" id="partList"></div><div id="partEditor" class="group" hidden>
+<section><h2>2 · Волосы, уши и аксессуары</h2><div class="two"><label>Тип<select id="kind"><option value="hair">Волосы</option><option value="ears">Уши</option><option value="horns">Рога</option><option value="tail">Хвост</option><option value="wings">Крылья</option><option value="glasses">Очки</option><option value="hat">Головной убор</option><option value="clothing">👕 Одежда</option><option value="accessory">Аксессуар</option></select></label><label>Кость<select id="anchor"><option value="head">Голова</option><option value="neck">Шея</option><option value="chest">Грудь</option><option value="back">Спина</option><option value="hips">Таз</option></select></label></div><label>Загрузить деталь GLB<input id="partFile" type="file" accept=".glb,model/gltf-binary"></label><button id="goWings" type="button" class="primary" style="text-align:center">🪽 Согнуть крылья 25° / 30° ↓</button><div id="partsPanel" hidden><div class="list" id="partList"></div><div id="partEditor" class="group" hidden>
 <div class="transform-tabs">
 <button id="modeMove" class="tool active" aria-pressed="true">✥ Двигать</button>
 <button id="modeRotate" class="tool" aria-pressed="false">⟳ Кольца XYZ</button>
@@ -73,6 +73,17 @@
 <button id="rigTail" type="button">🦴 Создать 3 сустава хвоста</button>
 <div class="two"><button id="previewTail" type="button">▶ Анимация хвоста</button><button id="stopTail" type="button">■ Остановить</button></div>
 <div id="tailStatus" class="wing-status" role="status">Загрузи хвост GLB; скелет создаётся отдельно от костей тела.</div></section>
+<section id="clothingSection" aria-label="Перенос весов на одежду">
+<h2>👕 2В · Весá одежды / Skin Transfer</h2>
+<div class="hint">После импорта и подгонки одежды к телу выбери меш тела с костями. Весá переносятся с ближайших треугольников поверхности, с плавным смешиванием до 4 костей. Одежда будет двигаться вместе с тем же скелетом.</div>
+<label>Импортированная одежда<select id="clothingTarget"><option value="">— Выбери одежду —</option></select></label>
+<label>Меш тела — источник весов<select id="weightSource"><option value="">— Сначала загрузи зариганный GLB —</option></select></label>
+<label>Максимальное расстояние от тела<select id="weightDistance"><option value="0.10">10% роста — плотная одежда</option><option value="0.18" selected>18% роста — обычная одежда</option><option value="0.30">30% роста — просторная одежда</option></select></label>
+<button id="transferWeights" type="button" class="primary">🦴 Перенести веса на одежду</button>
+<div class="two"><button id="poseCheck" type="button">▶ Проверить плечи и колени</button><button id="poseReset" type="button">■ Вернуть исходную позу</button></div>
+<div id="weightStatus" class="wing-status" role="status">Требуется зариганный персонаж и отдельный GLB одежды. Манекен без костей не подходит.</div>
+<div class="hint">Операция создаёт настоящий SkinnedMesh, сохраняет текстуры и не стирает веса тела. При слишком далёких вершинах ничего не изменит. Перед переносом поставь персонажа в исходную A/T-позу.</div>
+</section>
 <section><h2>3 · Мимика / Blend Shapes</h2><div id="morphs" class="group"><span class="hint">Доступные ползунки появятся после импорта модели с Blend Shapes.</span></div></section>
 <section><h2>4 · Готовность аватара</h2><div id="metrics" class="metrics">Загрузите модель для проверки.</div><div class="hint">Это предварительная проверка. SDK, Eye View, Avatar Descriptor, PhysBones и лимиты PC/Quest проверяются в Unity.</div></section>
 <section><h2>5 · Сохранение, проект и история</h2>

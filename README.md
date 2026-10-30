@@ -1,3 +1,13 @@
+## v1.0 — Clothing skin-weight transfer (beta)
+
+- **Import GLB as "👕 Одежда"** and fit it to a **rigged** base avatar in rest A/T pose using XYZ, rotation and scale.
+- In **2В · Weight Transfer** choose the source body **SkinnedMesh**. Nearest body triangles are found using an accelerated BVH; the source weights are interpolated with barycentric coordinates and reduced to four normalized bone influences per clothing vertex.
+- The garment becomes a real **SkinnedMesh referencing the original body skeleton**. The editor reparents it out of the chest/head bone to avoid double motion. Body weights and the clothing's geometry, UVs and materials remain intact.
+- The closest-surface distance guard is adjustable to 10%, 18%, or 30% of body height. If any garment vertex has no matching body surface within the allowed distance, the operation refuses to modify the clothing; use the correct body source/fit, or increase tolerance cautiously.
+- **Check shoulders/knees** test pose temporarily rotates recognized shoulder/elbow/leg bones. **Restore original pose** puts those bones back before export; generated weights and shared skeleton survive GLB export/reimport.
+- The mobile preview caps body source at 240,000 triangles, clothing at 120,000 vertices and 24 clothing meshes in one import to avoid worst-case memory spikes on 4 GB Android.
+- **Limitations**: Complex layered costumes, long skirts, bags, very loose clothing, and fingers/gloves may need manual skin-weight cleanup; this first implementation does not solve cloth physics, add missing skeletons, eliminate body penetration, or guarantee VRChat readiness. Preserve A/T pose before transfer. Voxel/biharmonic transfer and manual weight painting are later work.
+
 ## v0.9 — Combined tablet QA: tails, editable GLB, Undo/Redo
 
 - **3 articulated tail joints + automatic normalized skin weights** for separately imported GLB tails; select the tail's major axis and which end attaches to the body. Play/stop a basic wag clip and include the clip in GLB export. Optional; original humanoid rig untouched.
