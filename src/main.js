@@ -10,6 +10,7 @@ import {inspectGLBBytes} from './glb-verify.mjs';
 import {createWingBoneRig,makeWingFlapClip,poseWingRig} from './wing-rig.mjs';
 import {createTailRig,makeTailWagClip,poseTailRig} from './tail-rig.mjs';
 import {serializeProject,readEmbeddedProject,TransformHistory} from './project-state.mjs';
+import {findWeightSources,transferClothingWeights,clothingStatus,MAX_GARMENT_VERTICES} from './clothing-weights.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -108,6 +109,7 @@ function writeMorphs(){
 async function loadBase(file){
  toast('Загрузка 3D-модели…');const gltf=await parseGLB(file);
  transform.detach(); orbit.enabled=true;
+ restorePosePreview();
  wingMixer.stopAllAction(); wingMixer=new THREE.AnimationMixer(avatar);
  for(const p of parts){p.removed=true;p.container.parent?.remove(p.container);}
  parts=[];selection=null;
@@ -148,6 +150,8 @@ function recoverParts(project){
     p.config.bendDegrees=0;p.config.wingStretch=1;
     p.config.wingCenterOffset=0;
    }
+  }else if(record.type==='clothing'){
+   p.clothingWeighted=!!container.getObjectByProperty('isSkinnedMesh',true);
   }else if(record.type==='tail'){
    p.tailVertices=countPartVertices(container);
    p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
@@ -478,6 +482,96 @@ $('stopTail').addEventListener('click',()=>{
  wingMixer.clipAction(p.tailClip).stop();poseTailRig(p.tailRig,0,0);
 });
 
+let poseBackup=null;
+function restorePosePreview(){
+ if(!poseBackup)return;
+ for(const [bone,quaternion] of poseBackup)bone.quaternion.copy(quaternion);
+ poseBackup=null;
+ base?.updateWorldMatrix(true,true);
+}
+function updateClothingPanel(){
+ const p=selected(),picker=$('clothingTarget'),sourceSelect=$('weightSource');
+ picker.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='— Выбери одежду —';picker.append(empty);
+ for(const item of parts.filter(x=>x.config.type==='clothing')){
+  const opt=document.createElement('option');opt.value=item.id;opt.textContent=item.config.name;picker.append(opt);
+ }
+ picker.value=p?.config.type==='clothing'?p.id:'';
+ const old=sourceSelect.value;sourceSelect.replaceChildren();
+ const meshes=findWeightSources(base);
+ for(let i=0;i<meshes.length;i++){
+  const item=meshes[i],option=document.createElement('option');
+  option.value=String(i);
+  const count=item.geometry.getAttribute('position')?.count||0;
+  option.textContent=(item.name||'SkinnedMesh '+(i+1))+' · '+count.toLocaleString('ru-RU')+' вершин · '+item.skeleton.bones.length+' костей';
+  sourceSelect.append(option);
+ }
+ sourceSelect.value=meshes.length?(old && Number(old)<meshes.length?old:'0'):'';
+ const isClothing=p?.config.type==='clothing';
+ const alreadyRigged=!!p?.clothingWeighted||!!p?.container?.getObjectByProperty('isSkinnedMesh',true);
+ $('transferWeights').disabled=!isClothing||!meshes.length||alreadyRigged;
+ $('poseCheck').disabled=!meshes.length;
+ $('poseReset').disabled=!poseBackup;
+ $('weightStatus').textContent=!meshes.length
+  ? '⚠️ У загруженного персонажа нет SkinnedMesh с весами. Нужна настоящая зариганная модель.'
+  : !isClothing
+   ? 'Загрузи GLB с типом «👕 Одежда» и выбери его в этом разделе.'
+   : alreadyRigged
+    ? '✅ Одежда уже получила веса и использует скелет персонажа. Повторный перенос отключён. Проверь позу, затем сохрани GLB.'
+    : 'Готово: подгони одежду по положению и размеру; затем нажми «Перенести веса».';
+}
+$('clothingTarget').addEventListener('change',e=>{
+ const p=parts.find(x=>x.id===e.target.value);
+ selection=p?.id||null;renderParts();
+});
+$('transferWeights').addEventListener('click',async()=>{
+ const p=selected(),sources=findWeightSources(base);
+ const body=sources[Number($('weightSource').value)];
+ if(!p||p.config.type!=='clothing'||!body)return;
+ const button=$('transferWeights');button.disabled=true;
+ try{
+  if(p.clothingWeighted||p.container.getObjectByProperty('isSkinnedMesh',true))throw new Error('Одежда уже имеет веса');
+  restorePosePreview();
+  clothingStatus(p.container,body);
+  const distance=Number($('weightDistance').value)*avatarHeight;
+  const result=await transferClothingWeights(p.container,body,{
+   maxDistance:distance,chunkSize:1200,
+   onProgress:(done,total)=>{$('weightStatus').textContent='Перенос весов: '+Math.round(done/total*100)+'% ('+done.toLocaleString('ru-RU')+'/'+total.toLocaleString('ru-RU')+' вершин)';}
+  });
+  // Bone parenting would move the garment twice. Keep the same world
+  // placement, but reparent to the avatar scene root.
+  avatar.attach(p.container);
+  if(p.fallback){p.fallback.parent?.remove(p.fallback);p.fallback=null;}
+  p.config.anchor='root';
+  p.container.userData.avatarPart.anchor='root';
+  readObjectTransform(p);
+  p.clothingWeighted=true;
+  p.weightSource=body.name||'body';
+  recordEdit();renderParts();
+  $('weightStatus').textContent='✅ Готово: '+result.vertices+' вершин, '+result.meshes+' мешей. Привязано к костям персонажа, без двойной привязки к груди.';
+  toast('Веса одежды перенесены на '+result.vertices+' вершин. Можно проверить плечи и ноги.');
+ }catch(e){error(e);$('weightStatus').textContent='⚠️ '+(e?.message||String(e));}
+ finally{if(!p?.clothingWeighted)button.disabled=false;}
+});
+$('poseCheck').addEventListener('click',()=>{
+ if(!base)return;
+ restorePosePreview();
+ const bones=[];base.traverse(o=>{if(o.isBone)bones.push(o);});
+ const matches=bones.filter(b=>/(upper.?arm|shoulder|forearm|lower.?arm|thigh|upper.?leg|calf|lower.?leg)/i.test(b.name));
+ if(!matches.length){toast('В скелете нет распознанных костей рук/ног для тестовой позы');return;}
+ poseBackup=matches.map(b=>[b,b.quaternion.clone()]);
+ for(const bone of matches){
+  const name=bone.name.toLowerCase(),side=/right|_r\b|\.r\b/.test(name)?-1:1;
+  if(/shoulder|upper.?arm/.test(name))bone.rotateZ(side*.38);
+  else if(/forearm|lower.?arm/.test(name))bone.rotateY(side*.35);
+  else if(/thigh|upper.?leg/.test(name))bone.rotateX(.25);
+  else if(/calf|lower.?leg/.test(name))bone.rotateX(-.30);
+ }
+ base.updateWorldMatrix(true,true);
+ $('poseReset').disabled=false;
+ toast('Проверка позы: согнуты плечи, локти и ноги. Посмотри, не тянет ли ткань через тело.');
+});
+$('poseReset').addEventListener('click',()=>{restorePosePreview();$('poseReset').disabled=true;toast('Исходная поза восстановлена');});
+
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
  for(const p of parts){
@@ -491,6 +585,7 @@ function renderParts(){
  if(p)updateTransformFields(p);
  renderWingPanel();
  updateTailPanel();
+ updateClothingPanel();
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
@@ -633,6 +728,7 @@ async function saveCombinedGLB(asProject=false){
  try{
   toast('Проверка завершения деформаций…');
   await Promise.all(parts.map(p=>p.wingTask).filter(Boolean));
+  restorePosePreview();
   for(const p of parts){
    if(p.wingRig&&p.wingClip){wingMixer.clipAction(p.wingClip).stop();poseWingRig(p.wingRig,0,p.config.wingFoldDirection);}
    if(p.tailRig&&p.tailClip){wingMixer.clipAction(p.tailClip).stop();poseTailRig(p.tailRig,0,0);}
