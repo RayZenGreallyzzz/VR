@@ -8,6 +8,8 @@ import {captureWingGeometry,deformWingGeometry,deformWingGeometryAsync,detectWin
 import {saveOutput} from './save-output.mjs';
 import {inspectGLBBytes} from './glb-verify.mjs';
 import {createWingBoneRig,makeWingFlapClip,poseWingRig} from './wing-rig.mjs';
+import {createTailRig,makeTailWagClip,poseTailRig} from './tail-rig.mjs';
+import {serializeProject,readEmbeddedProject,TransformHistory} from './project-state.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -29,6 +31,24 @@ const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
 let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1,baseBoundingBox=null;
 let wingMixer=new THREE.AnimationMixer(avatar);
+const history=new TransformHistory(80);
+let historyApplying=false;
+function snapshot(){return parts.map(p=>({id:p.id,config:structuredClone(p.config)}));}
+function recordEdit(){if(historyApplying)return;history.record(snapshot());updateHistoryButtons();}
+function updateHistoryButtons(){$('undoEdit').disabled=!history.canUndo;$('redoEdit').disabled=!history.canRedo;}
+async function applySnapshot(state){
+ historyApplying=true;
+ try{
+  for(const data of state){const p=parts.find(x=>x.id===data.id);if(!p)continue;
+   p.config=structuredClone(data.config);placePart(p);
+   if(p.wingSource&&!p.wingRig)await queueWingDeformation(p);
+  }
+  renderParts();
+ }finally{historyApplying=false;updateHistoryButtons();}
+}
+$('undoEdit').addEventListener('click',async()=>{const state=history.undo();if(state)await applySnapshot(state);});
+$('redoEdit').addEventListener('click',async()=>{const state=history.redo();if(state)await applySnapshot(state);});
+
 const transform=new TransformControls(camera,renderer.domElement);
 transform.setMode('translate');
 transform.setSpace('local');
@@ -44,6 +64,7 @@ transform.addEventListener('objectChange', ()=>{
  readObjectTransform(p);
  updateTransformFields(p);
 });
+transform.addEventListener('mouseUp',recordEdit);
 const toast=message=>{$('toast').textContent=message;};
 const error=e=>{console.error(e);toast('Ошибка: '+(e?.message||String(e)));};
 // Use the Android system document picker for save locations; browser fallback in save-output.mjs.
