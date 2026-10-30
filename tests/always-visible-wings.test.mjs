@@ -37,3 +37,10 @@ test('selected panel and fold control remain independently available',()=>{
  assert.ok(start>initialEditor && start<endSection);
  assert.ok(js.includes("picker.value=p?.id||''"));
 });
+
+test('wing fold shortcut is visible beside GLB accessory import and scrolls to editor',()=>{
+ assert.match(html,/<button id="goWings"/);
+ assert.ok(html.indexOf('id="goWings"')<html.indexOf('id="partEditor"'));
+ assert.match(js,/\$\('goWings'\)\.addEventListener\('click'/);
+ assert.match(js,/\$\('wingSection'\)\.scrollIntoView/);
+});

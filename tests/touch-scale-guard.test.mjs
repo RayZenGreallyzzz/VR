@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES} from '../src/placement-safety.mjs';
+import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from '../src/placement-safety.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
 
@@ -40,8 +40,11 @@ test('wing deformation controls are locked by default and throttled',()=>{
   assert.match(html,new RegExp('id="'+id+'"[^>]*disabled'));
  }
  assert.match(main,/lockWings\(\)/);
- assert.match(main,/requestAnimationFrame\(/);
- assert.ok(MAX_WING_VERTICES<=100000);
+ const deformation=readFileSync(new URL('../src/wing-geometry.mjs',import.meta.url),'utf8');
+ assert.match(deformation,/requestAnimationFrame/);
+ assert.match(main,/deformWingGeometryAsync/);
+ assert.ok(INTERACTIVE_WING_VERTICES<=100000);
+ assert.ok(MAX_WING_VERTICES>=600000);
 });
 test('scale cannot change attachment anchor; missing back bone receives stable back locator',()=>{
  assert.match(main,/defaultAnchorPoint\(baseBoundingBox,anchor\)/);

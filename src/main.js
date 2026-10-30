@@ -4,9 +4,10 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportProjectMetadata} from './avatar-core.mjs';
-import {captureWingGeometry,deformWingGeometry,detectWingSpanAxis} from './wing-geometry.mjs';
+import {captureWingGeometry,deformWingGeometry,deformWingGeometryAsync,detectWingSpanAxis} from './wing-geometry.mjs';
 import {saveOutput} from './save-output.mjs';
-import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES} from './placement-safety.mjs';
+import {inspectGLBBytes} from './glb-verify.mjs';
+import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas=$('canvas');
@@ -82,7 +83,7 @@ function writeMorphs(){
 async function loadBase(file){
  toast('Загрузка 3D-модели…');const gltf=await parseGLB(file);
  transform.detach(); orbit.enabled=true;
- for(const p of parts)p.container.parent?.remove(p.container);
+ for(const p of parts){p.removed=true;p.container.parent?.remove(p.container);}
  parts=[];selection=null;
  if(base){avatar.remove(base);dispose(base);}
  base=gltf.scene;base.name='BaseAvatar';avatar.add(base);modelName=file.name||'avatar.glb';clips=gltf.animations||[];
@@ -151,7 +152,7 @@ function syncWingSliders(p){
  $('axisHint').textContent='Текущая ось размаха: '+detected+'. Если два крыла гнутся неправильно, выбери другую ось; смена направления разворачивает изгиб.';
 }
 const wingInputs=['wingBend','wingStretch','wingHinge','wingCenter'];
-let wingLockTimer=null,wingFrame=0,pendingWing=null;
+let wingLockTimer=null;
 function lockWings(){
  clearTimeout(wingLockTimer);
  for(const id of wingInputs)$(id).disabled=true;
@@ -166,17 +167,38 @@ function unlockWings(){
 }
 $('wingUnlock').addEventListener('click',()=>wingInputs.some(id=>$(id).disabled)?unlockWings():lockWings());
 function queueWingDeformation(p){
- pendingWing=p;
- if(!wingFrame){
-  wingFrame=requestAnimationFrame(()=>{
-   wingFrame=0;
-   const target=pendingWing;pendingWing=null;
-   if(target?.wingSource&&parts.includes(target)){
-    try{deformWingGeometry(target.wingSource,target.config);}
-    catch(e){error(e);lockWings();}
+ if(!p?.wingSource || p.removed)return Promise.resolve();
+ // Coalesce repeated slider moves; obsolete jobs stop between batches.
+ p.wingRevision=(p.wingRevision||0)+1;
+ if(p.wingTask)return p.wingTask;
+ const work=(async()=>{
+  while(!p.removed && p.wingApplied!==p.wingRevision){
+   const revision=p.wingRevision;
+   const config={...p.config};
+   if(p.wingVertices>INTERACTIVE_WING_VERTICES){
+    const result=await deformWingGeometryAsync(p.wingSource,config,{
+     chunkSize:6000,
+     cancelled:()=>p.removed||p.wingRevision!==revision,
+     onProgress:(done,total)=>{
+      if(selected()===p)$('wingStatus').textContent='🪽 Запекание тяжёлых крыльев: '+Math.round(done/total*100)+'% · '+total.toLocaleString('ru-RU')+' вершин. Экспорт дождётся завершения.';
+     }
+    });
+    if(result.cancelled)continue;
+   }else{
+    // Small wings remain responsive to every user edit.
+    deformWingGeometry(p.wingSource,config);
    }
-  });
- }
+   p.wingApplied=revision;
+   if(selected()===p){
+    $('wingStatus').textContent='✅ Сгиб применён к геометрии ('+p.wingVertices.toLocaleString('ru-RU')+' вершин). Экспорт GLB сохранит форму.';
+   }
+  }
+ })().catch(e=>{
+  p.wingProblem='Ошибка сгиба крыльев: '+e.message;
+  error(e);
+ }).finally(()=>{p.wingTask=null;});
+ p.wingTask=work;
+ return work;
 }
 function updateWingDeformation(){
  const p=selected();
@@ -239,7 +261,7 @@ function assignPartAsWings(p){
  p.wingVertices=total;
  if(total===0){p.wingProblem='В этой детали нет 3D-вершин.';return false;}
  if(total>MAX_WING_VERTICES){
-  p.wingProblem='В детали '+total.toLocaleString('ru-RU')+' вершин — больше безопасных '+MAX_WING_VERTICES.toLocaleString('ru-RU')+'. Для сгиба на планшете нужна облегчённая модель крыльев.';
+  p.wingProblem='В детали '+total.toLocaleString('ru-RU')+' вершин — больше лимита '+MAX_WING_VERTICES.toLocaleString('ru-RU')+' для планшета. Понадобится облегчённая модель крыльев.';
   return false;
  }
  try{
@@ -276,7 +298,7 @@ function renderWingPanel(){
  picker.value=p?.id||'';
  const ready=!!p?.wingSource;
  $('wingStatus').textContent=ready
-  ? '✅ Готово: '+p.config.name+'. Можно нажать 25° или 30°; изменения сохраняются в GLB.'
+  ? '✅ '+p.config.name+' · '+p.wingVertices.toLocaleString('ru-RU')+' вершин. '+(p.wingVertices>INTERACTIVE_WING_VERTICES?'Режим обработки по частям — кнопки 25°/30° доступны.':'Быстрое сгибание 25°/30° доступно.')
   : !p
    ? 'Загрузи персонажа и крылья GLB. После импорта выбери деталь в списке выше.'
    : p.wingProblem
@@ -290,6 +312,9 @@ function renderWingPanel(){
  lockWings();
  if(ready)syncWingSliders(p);
 }
+$('goWings').addEventListener('click',()=>{
+ $('wingSection').scrollIntoView({behavior:'smooth',block:'start'});
+});
 $('wingTarget').addEventListener('change',e=>{
  const id=e.target.value;
  selection=parts.some(p=>p.id===id)?id:null;
@@ -425,7 +450,7 @@ function resetTransform(what){
 $('resetPosition').addEventListener('click',()=>resetTransform('position'));
 $('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
 $('resetAll').addEventListener('click',()=>resetTransform('all'));
-$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
+$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
 $('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
 $('saveJson').addEventListener('click',async()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
@@ -440,26 +465,26 @@ $('saveJson').addEventListener('click',async()=>{
 });
 $('exportGlb').addEventListener('click',async()=>{
  if(!base){toast('Сначала загрузите модель');return;}
- const btn=$('exportGlb');btn.disabled=true;toast('Запекание добавленных деталей в GLB…');
+ const btn=$('exportGlb');btn.disabled=true;toast('Проверка завершения деформаций перед экспортом…');
  try{
+  // Never export half-written vertex buffers from a chunked high-poly fold.
+  await Promise.all(parts.map(p=>p.wingTask).filter(Boolean));
+  if(parts.some(p=>p.wingProblem?.startsWith('Ошибка сгиба'))){throw new Error('Не удалось завершить сгиб крыльев. Экспорт отменён.');}
+  toast('Запекание добавленных деталей в GLB…');
   // All attached accessory meshes belong to the avatar export hierarchy.
   // Deformed wing geometry is already real BufferGeometry, not a shader effect.
   const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
    binary:true,onlyVisible:true,animations:clips
   }));
-  const roundtrip=await new Promise((resolve,reject)=>loader.parse(exported,'',resolve,reject));
-  const expected=parts.filter(p=>p.config.visible).length;
-  let recovered=0;
-  roundtrip.scene.traverse(o=>{if(o.userData?.avatarPart?.id)recovered++;});
-  if(recovered<expected)throw new Error('Проверка запекания: найдено '+recovered+' деталей из '+expected+'. Сохранение отменено.');
-  const info=inspectAvatar(roundtrip.scene);
-  if(info.meshes<1)throw new Error('GLB после повторного открытия не содержит мешей.');
-  toast('Проверено: '+recovered+'/'+expected+' деталей внутри GLB. Выбери папку…');
+  // Verify attachment IDs via the GLB JSON chunk. Parsing it without
+  // reloading all textures/meshes avoids doubling memory on Android.
+  const expected=parts.filter(p=>p.config.visible).map(p=>p.id);
+  const info=inspectGLBBytes(exported,expected);
+  toast('Проверено: '+expected.length+' из '+expected.length+' деталей внутри GLB. Выбери папку…');
   await saveOutput(exported,'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  toast('GLB сохранён: '+info.meshes+' мешей, '+recovered+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
-  dispose(roundtrip.scene);
+  toast('GLB сохранён: '+info.meshes+' мешей, '+expected.length+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
   else error(e);

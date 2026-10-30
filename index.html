@@ -13,11 +13,11 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.6 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.7 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
-<section><h2>2 · Волосы, уши и аксессуары</h2><div class="two"><label>Тип<select id="kind"><option value="hair">Волосы</option><option value="ears">Уши</option><option value="horns">Рога</option><option value="tail">Хвост</option><option value="wings">Крылья</option><option value="glasses">Очки</option><option value="hat">Головной убор</option><option value="accessory">Аксессуар</option></select></label><label>Кость<select id="anchor"><option value="head">Голова</option><option value="neck">Шея</option><option value="chest">Грудь</option><option value="back">Спина</option><option value="hips">Таз</option></select></label></div><label>Загрузить деталь GLB<input id="partFile" type="file" accept=".glb,model/gltf-binary"></label><div id="partsPanel" hidden><div class="list" id="partList"></div><div id="partEditor" class="group" hidden>
+<section><h2>2 · Волосы, уши и аксессуары</h2><div class="two"><label>Тип<select id="kind"><option value="hair">Волосы</option><option value="ears">Уши</option><option value="horns">Рога</option><option value="tail">Хвост</option><option value="wings">Крылья</option><option value="glasses">Очки</option><option value="hat">Головной убор</option><option value="accessory">Аксессуар</option></select></label><label>Кость<select id="anchor"><option value="head">Голова</option><option value="neck">Шея</option><option value="chest">Грудь</option><option value="back">Спина</option><option value="hips">Таз</option></select></label></div><label>Загрузить деталь GLB<input id="partFile" type="file" accept=".glb,model/gltf-binary"></label><button id="goWings" type="button" class="primary" style="text-align:center">🪽 Согнуть крылья 25° / 30° ↓</button><div id="partsPanel" hidden><div class="list" id="partList"></div><div id="partEditor" class="group" hidden>
 <div class="transform-tabs">
 <button id="modeMove" class="tool active" aria-pressed="true">✥ Двигать</button>
 <button id="modeRotate" class="tool" aria-pressed="false">⟳ Кольца XYZ</button>
@@ -40,7 +40,7 @@
 </div></div><div class="hint">Деталь привязывается к кости и двигается вместе с ней. Для одежды с деформацией потребуется отдельная операция skin transfer.</div></section>
 <section id="wingSection" class="wing-section" aria-label="Редактор сгиба крыльев">
 <h2>🪽 2А · Сгиб крыльев — всегда доступен</h2>
-<div class="hint">Две прямые половины → V-образный сгиб у крепления на спине.</div>
+<div class="hint">Две прямые половины → V-образный сгиб у крепления на спине. До 100 000 вершин — быстрый режим; до 600 000 — безопасный пересчёт по частям с процентом выполнения. При экспорте GLB приложение дождётся окончания сгиба.</div>
 <label>Какие крылья редактировать<select id="wingTarget"><option value="">— Выбери импортированную деталь —</option></select></label>
 <div id="wingStatus" class="wing-status" role="status">Импортируй GLB и выбери деталь для сгибания. Этот раздел больше не исчезает.</div>
 <button id="makeWings" type="button">🪽 Назначить выбранную деталь крыльями</button>
