@@ -89,5 +89,5 @@ test('UI offers preview, stop and bone creation, export includes generated clip'
  for(const id of ['rigWings','previewWingFlap','stopWingFlap','rigWingStatus'])assert.ok(h.includes('id="'+id+'"'));
  assert.match(js,/createWingBoneRig/);
  assert.match(js,/new THREE\.AnimationMixer\(avatar\)/);
- assert.match(js,/\.\.\.parts\.map\(p=>p\.wingClip\)\.filter\(Boolean\)/);
+ assert.match(js,/parts\.flatMap\(p=>\[p\.wingClip,p\.tailClip\]\)\.filter\(Boolean\)/);
 });
