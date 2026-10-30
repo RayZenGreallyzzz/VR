@@ -312,6 +312,9 @@ function renderWingPanel(){
  lockWings();
  if(ready)syncWingSliders(p);
 }
+$('goWings').addEventListener('click',()=>{
+ $('wingSection').scrollIntoView({behavior:'smooth',block:'start'});
+});
 $('wingTarget').addEventListener('change',e=>{
  const id=e.target.value;
  selection=parts.some(p=>p.id===id)?id:null;
