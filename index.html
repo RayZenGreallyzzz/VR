@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v1.1 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v1.2 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
@@ -73,8 +73,20 @@
 <button id="rigTail" type="button">🦴 Создать 3 сустава хвоста</button>
 <div class="two"><button id="previewTail" type="button">▶ Анимация хвоста</button><button id="stopTail" type="button">■ Остановить</button></div>
 <div id="tailStatus" class="wing-status" role="status">Загрузи хвост GLB; скелет создаётся отдельно от костей тела.</div></section>
+<section id="smartFitSection" aria-label="SmartFit оболочка тела и автоматическое одевание">
+<h2>✨ 2В · Phoenix SmartFit Body Cage</h2>
+<div class="hint">Для моделей Meshy/Tripo с миллионами треугольников: создаём лёгкую невидимую оболочку по поверхности, НЕ меняя исходный меш. Она подходит для тела, состоящего из множества несвязанных фрагментов.</div>
+<label>Поверхность тела<select id="smartBodySource"><option value="">— Выбери меш персонажа —</option></select></label>
+<label>Высота поверхности оболочки<select id="smartCageTop"><option value="0.78">78% — длинные рога, волосы</option><option value="0.86" selected>86% — стандарт, без головы</option><option value="0.94">94% — включая шею</option><option value="1">100% — вся модель (может захватить волосы)</option></select></label>
+<div class="two"><button id="buildBodyCage" type="button">🧍 Подготовить Body Cage</button><button id="toggleBodyCage" type="button">👁 Показать оболочку</button></div>
+<div class="hint">Оболочка — облегчённая геометрическая поверхность, не полное SDF. Попавшие в неё длинные волосы или декор иногда требуют выбора меньшей высоты.</div>
+<label>Как надеть одежду<select id="smartClothesStyle"><option value="dress">👗 Платье</option><option value="top">👕 Верх / куртка</option><option value="pants">👖 Штаны</option><option value="skirt">💃 Юбка</option></select></label>
+<button id="smartDress" type="button" class="primary">✨ Надеть выбранную одежду автоматически</button>
+<div id="smartFitStatus" class="wing-status" role="status">Загрузи персонажа, импортируй GLB как «👕 Одежда», затем нажми «Надеть». Скелет пока необязателен для подгонки формы.</div>
+<div class="hint">Автоматически подгоняется положение и форма; если у тела уже есть скелет, пробуем перенести веса. Если рига нет, результат можно сохранить как GLB, но для анимаций сначала требуется риг. Исходное тело не изменяется, бельё под одеждой пока не скрывается автоматически.</div>
+</section>
 <section id="dressFitSection" aria-label="Подогнать одежду и расширить юбку">
-<h2>👗 2В · Одежда без заморочек</h2>
+<h2>👗 2Г · Ручная подгонка одежды</h2>
 <div class="hint">Импортируй GLB как «👕 Одежда». Нажми «Облегание тела», затем тяни за <strong>жёлтую сферу на подоле</strong> в 3D-окне — юбка станет пышнее, а пояс останется на месте.</div>
 <label>Меш персонажа для облегания<select id="fitBodySource"><option value="">— Выбери поверхность тела —</option></select></label>
 <div class="two"><label>Тип одежды<select id="fitStyle"><option value="dress">👗 Платье — свободный низ</option><option value="skirt">Юбка — талия</option><option value="top">Кофта — весь верх</option></select></label><label>Плотность<select id="fitStrength"><option value="0.35">Мягко</option><option value="0.65" selected>Средне</option><option value="0.90">Плотно</option></select></label></div>
@@ -88,7 +100,7 @@
 <div class="hint">Верх и пояс остаются на месте; расширяется нижняя часть. Операции редактируют вершины и сохраняют UV. Для сложной одежды может понадобиться дополнительная ручная подгонка. Сначала объём, потом перенос весов.</div>
 </section>
 <section id="clothingSection" aria-label="Перенос весов на одежду">
-<h2>👕 2В · Весá одежды / Skin Transfer</h2>
+<h2>👕 2Д · Веса одежды / Skin Transfer</h2>
 <div class="hint">После импорта и подгонки одежды к телу выбери меш тела с костями. Весá переносятся с ближайших треугольников поверхности, с плавным смешиванием до 4 костей. Одежда будет двигаться вместе с тем же скелетом.</div>
 <label>Импортированная одежда<select id="clothingTarget"><option value="">— Выбери одежду —</option></select></label>
 <label>Меш тела — источник весов<select id="weightSource"><option value="">— Сначала загрузи зариганный GLB —</option></select></label>
