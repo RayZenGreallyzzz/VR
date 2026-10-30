@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {captureWingGeometry,deformWingGeometry} from '../src/wing-geometry.mjs';
+import {inspectGLBBytes} from '../src/glb-verify.mjs';
 
 // Node.js does not supply FileReader; Three's exporter uses it for binary GLB.
 if(!globalThis.FileReader){
@@ -28,6 +29,10 @@ test('a bone-attached, bent wing is physically present in exported and re-import
  assert.ok(bendDepth>0.5,'must bend actual mesh vertex data');
  const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{binary:true,onlyVisible:true}));
  assert.ok(exported instanceof ArrayBuffer);
+ const fastCheck=inspectGLBBytes(exported,['wing-test']);
+ assert.equal(fastCheck.attachments,1);
+ assert.equal(fastCheck.meshes,2);
+ assert.throws(()=>inspectGLBBytes(exported,['missing-wing']),/GLB потерял детали/);
  const imported=await new Promise((resolve,reject)=>new GLTFLoader().parse(exported,'',resolve,reject));
  let recoveredParts=0,recoveredMeshes=0,wingFound=false;
  imported.scene.traverse(o=>{
@@ -53,4 +58,9 @@ test('Android document picker registered before native Gradle compile',()=>{
   assert.match(install,/registerPlugin\(NativeSavePlugin\.class\)/);
   assert.match(pkg.scripts['android:apk'],/install-native-save/);
  });
+});
+
+test('GLB verification rejects truncated and malformed binary data without importing it',()=>{
+ assert.throws(()=>inspectGLBBytes(new ArrayBuffer(5)),/GLB/);
+ const broken=new Uint8Array(24);assert.throws(()=>inspectGLBBytes(broken),/заголовок/);
 });
