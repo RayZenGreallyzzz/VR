@@ -1,3 +1,13 @@
+## v0.9 — Combined tablet QA: tails, editable GLB, Undo/Redo
+
+- **3 articulated tail joints + automatic normalized skin weights** for separately imported GLB tails; select the tail's major axis and which end attaches to the body. Play/stop a basic wag clip and include the clip in GLB export. Optional; original humanoid rig untouched.
+- **Save Editable Project GLB** embeds all accessory meshes (including temporarily hidden parts), transforms and part configuration metadata in one GLB file. **Open Editable Project** restores these layers for additional adjustment without separately locating imported GLBs. Regular avatar GLB export keeps only visible accessories.
+- **Undo / Redo** covers accessory position, rotation, scale, visibility and unrigged wing bend settings, up to 80 snapshots. Add/remove, rig creation, and geometric sculpting are not yet undoable.
+- Existing two-bone wing rig, fold presets, high-poly chunked wing operations and Android SAF save picker stay available.
+- **Limitations:** a wing with already-exported skin cannot be non-destructively unbent and re-rigged; opening retains its skinned mesh and animation clips. Tail and wing rigs are prototypes, not VRChat-ready PhysBones. Clothes auto-skin and facial morph editing are still pending.
+- For tablets with 4 GB RAM, initial automatic tail rigging is capped at 250,000 vertices. This is a safe-start cap, not a permanent format limit.
+- Validate Android 15 file picker, touch controls, heavy GLB models and actual device stability on the tablet; CI alone does not prove those.
+
 ## v0.8 — optional wing skeleton and flap animation (experimental)
 
 - **Create two wing bones + automatic skin weights** after fitting and folding wings. This adds a separate WingRoot + WingLeft/WingRight skeleton to imported wing geometry without altering the avatar's original skeleton.

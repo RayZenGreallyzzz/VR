@@ -8,6 +8,8 @@ import {captureWingGeometry,deformWingGeometry,deformWingGeometryAsync,detectWin
 import {saveOutput} from './save-output.mjs';
 import {inspectGLBBytes} from './glb-verify.mjs';
 import {createWingBoneRig,makeWingFlapClip,poseWingRig} from './wing-rig.mjs';
+import {createTailRig,makeTailWagClip,poseTailRig} from './tail-rig.mjs';
+import {serializeProject,readEmbeddedProject,TransformHistory} from './project-state.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -29,6 +31,24 @@ const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
 let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1,baseBoundingBox=null;
 let wingMixer=new THREE.AnimationMixer(avatar);
+const history=new TransformHistory(80);
+let historyApplying=false;
+function snapshot(){return parts.map(p=>({id:p.id,config:structuredClone(p.config)}));}
+function recordEdit(){if(historyApplying)return;history.record(snapshot());updateHistoryButtons();}
+function updateHistoryButtons(){$('undoEdit').disabled=!history.canUndo;$('redoEdit').disabled=!history.canRedo;}
+async function applySnapshot(state){
+ historyApplying=true;
+ try{
+  for(const data of state){const p=parts.find(x=>x.id===data.id);if(!p)continue;
+   p.config=structuredClone(data.config);placePart(p);
+   if(p.wingSource&&!p.wingRig)await queueWingDeformation(p);
+  }
+  renderParts();
+ }finally{historyApplying=false;updateHistoryButtons();}
+}
+$('undoEdit').addEventListener('click',async()=>{const state=history.undo();if(state)await applySnapshot(state);});
+$('redoEdit').addEventListener('click',async()=>{const state=history.redo();if(state)await applySnapshot(state);});
+
 const transform=new TransformControls(camera,renderer.domElement);
 transform.setMode('translate');
 transform.setSpace('local');
@@ -44,6 +64,7 @@ transform.addEventListener('objectChange', ()=>{
  readObjectTransform(p);
  updateTransformFields(p);
 });
+transform.addEventListener('mouseUp',recordEdit);
 const toast=message=>{$('toast').textContent=message;};
 const error=e=>{console.error(e);toast('Ошибка: '+(e?.message||String(e)));};
 // Use the Android system document picker for save locations; browser fallback in save-output.mjs.
@@ -95,8 +116,49 @@ async function loadBase(file){
  const avatarBox=new THREE.Box3().setFromObject(base);
  avatarHeight=Math.max(.1,avatarBox.getSize(new THREE.Vector3()).y);
  baseBoundingBox=avatarBox.clone();
+ const saved=readEmbeddedProject(base);
+ if(saved)recoverParts(saved);
+ history.clear();recordEdit();
  centerView();writeMetrics();writeMorphs();renderParts();
- toast('Модель загружена: '+modelName+'. Можно добавлять волосы и аксессуары.');
+ toast(saved?'✅ Проект открыт: '+parts.length+' деталей; геометрия и слои восстановлены.':'Модель загружена: '+modelName+'. Можно добавлять волосы и аксессуары.');
+}
+function recoverParts(project){
+ const found=new Map();
+ base.traverse(o=>{
+  const id=o.userData?.avatarPart?.id;
+  if(typeof id==='string')found.set(id,o);
+ });
+ for(const record of project.attachments){
+  const container=found.get(record.id);
+  if(!container)continue;
+  const bounds=new THREE.Box3().setFromObject(container);
+  const size=bounds.getSize(new THREE.Vector3());
+  const sourceSpan=Math.max(size.x,size.y,size.z,.000001)/Math.max(record.scale,.000001);
+  const p={id:record.id,config:record,container,sourceSpan,
+   maxScale:limitAccessoryScale(1,sourceSpan,avatarHeight,record.type).maxScale,
+   fallback:null};
+  if(record.type==='wings'){
+   p.wingVertices=countPartVertices(container);
+   const alreadySkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
+   if(alreadySkinned){
+    p.wingProblem='В загруженных крыльях уже есть кости. Сгиб и авториг поверх существующего скелета отключены; анимации GLB сохранены.';
+   }else if(p.wingVertices<=MAX_WING_VERTICES){
+    p.wingSource=captureWingGeometry(container);
+    // The GLB contains already-baked geometry; avoid bending it a second time.
+    p.config.bendDegrees=0;p.config.wingStretch=1;
+    p.config.wingCenterOffset=0;
+   }
+  }else if(record.type==='tail'){
+   p.tailVertices=countPartVertices(container);
+   p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
+  }
+  // Exported transform nodes already carry their positions and rotations.
+  // Restore visibility explicitly because standard glTF node visibility is not persistent.
+  container.visible=record.visible;
+  parts.push(p);
+ }
+ serial=Math.max(serial,...parts.map(p=>Number(p.id.match(/^part-(\d+)$/)?.[1])||0),0);
+ selection=parts[0]?.id||null;
 }
 function selected(){return parts.find(p=>p.id===selection)||null;}
 function placePart(p){
@@ -215,7 +277,7 @@ function updateWingDeformation(){
  p.config.wingCenterOffset=Number($('wingCenter').value);
  p.config.wingSpanAxis=$('wingAxis').value;
  p.config.wingFoldDirection=Number($('wingDirection').value);
- syncWingSliders(p);queueWingDeformation(p);
+ syncWingSliders(p);queueWingDeformation(p);recordEdit();
  clearTimeout(wingLockTimer);wingLockTimer=setTimeout(lockWings,12000);
 }
 for(const id of wingInputs)$(id).addEventListener('input',updateWingDeformation);
@@ -227,7 +289,7 @@ for(const [id,angle] of [['fold25',25],['fold30',30]]){
   p.config.bendDegrees=angle;
   p.config.wingFoldDirection=-1;
   syncWingSliders(p);
-  queueWingDeformation(p);
+  queueWingDeformation(p);recordEdit();
   toast('Обе половины крыла сложены назад на '+angle+'° у центра. При необходимости сдвинь центр или поменяй ось.');
  });
 }
@@ -235,7 +297,7 @@ $('resetWings').addEventListener('click',()=>{
  const p=selected();if(!p?.wingSource)return;
  p.config.bendDegrees=0;p.config.wingStretch=1;p.config.hingeFraction=.08;
  p.config.wingCenterOffset=0;p.config.wingSpanAxis='auto';p.config.wingFoldDirection=-1;
- queueWingDeformation(p);syncWingSliders(p);lockWings();
+ queueWingDeformation(p);syncWingSliders(p);lockWings();recordEdit();
 });
 const MAX_RIG_VERTICES=250_000;
 function updateRigPanel(p){
@@ -370,6 +432,52 @@ $('makeWings').addEventListener('click',()=>{
  else toast(p.wingProblem||'Не удалось подготовить крылья');
  renderParts();
 });
+const MAX_TAIL_RIG_VERTICES=250_000;
+function updateTailPanel(){
+ const picker=$('tailTarget'),p=selected();
+ picker.replaceChildren();
+ const empty=document.createElement('option');empty.value='';empty.textContent='— Выбери хвост —';picker.append(empty);
+ for(const detail of parts.filter(q=>q.config.type==='tail')){
+  const o=document.createElement('option');o.value=detail.id;o.textContent=detail.config.name;picker.append(o);
+ }
+ picker.value=p?.config.type==='tail'?p.id:'';
+ const isTail=p?.config.type==='tail',skinned=p?.tailSkinned;
+ $('rigTail').disabled=!isTail||!!p.tailRig||!!skinned||p.tailVertices>MAX_TAIL_RIG_VERTICES;
+ $('previewTail').disabled=!p?.tailRig;$('stopTail').disabled=!p?.tailRig;
+ $('tailStatus').textContent=!isTail
+  ? 'Выбери импортированный хвост. Риг создаётся отдельно от скелета персонажа.'
+  : p.tailRig
+   ? '✅ Хвост с 3 суставами и анимацией. Можно запустить предпросмотр и экспортировать GLB.'
+   : skinned
+    ? 'ℹ️ У этого хвоста уже есть скин и кости. Повторный автоскининг отключён.'
+    : p.tailVertices>MAX_TAIL_RIG_VERTICES
+     ? '⚠️ Для мобильного авторигинга нужно не более '+MAX_TAIL_RIG_VERTICES.toLocaleString('ru-RU')+' вершин. Сейчас: '+p.tailVertices.toLocaleString('ru-RU')
+     : 'Готово к автоматическому созданию 3 суставов хвоста.';
+}
+$('tailTarget').addEventListener('change',e=>{
+ const chosen=parts.find(p=>p.id===e.target.value);
+ selection=chosen?.id||null;renderParts();
+});
+$('rigTail').addEventListener('click',()=>{
+ const p=selected();if(p?.config.type!=='tail'||p.tailRig||p.tailSkinned||p.tailVertices>MAX_TAIL_RIG_VERTICES)return;
+ try{
+  const source=captureWingGeometry(p.container);
+  p.tailRig=createTailRig(source,{id:p.id,axis:$('tailAxis').value,base:$('tailRootSide').value});
+  p.tailClip=makeTailWagClip(p.tailRig,{amplitude:18,duration:2});
+  p.tailSkinned=true;
+  toast('Хвост зариган: 3 сустава, веса и клип покачивания готовы.');
+ }catch(e){error(e);}
+ updateTailPanel();
+});
+$('previewTail').addEventListener('click',()=>{
+ const p=selected();if(!p?.tailRig||!p.tailClip)return;
+ wingMixer.clipAction(p.tailClip).reset().play();toast('Анимация хвоста запущена');
+});
+$('stopTail').addEventListener('click',()=>{
+ const p=selected();if(!p?.tailRig||!p.tailClip)return;
+ wingMixer.clipAction(p.tailClip).stop();poseTailRig(p.tailRig,0,0);
+});
+
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
  for(const p of parts){
@@ -382,6 +490,7 @@ function renderParts(){
  if(p)updateScaleStatus(p);
  if(p)updateTransformFields(p);
  renderWingPanel();
+ updateTailPanel();
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
@@ -409,9 +518,13 @@ async function addPart(file){
   fallback.add(container);
  }
  const p={id:config.id,config,container,sourceSpan,maxScale:sizeLimit.maxScale,fallback};
+ if(kind==='tail'){
+  p.tailVertices=countPartVertices(container);
+  p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
+ }
  placePart(p);
  if(kind==='wings')assignPartAsWings(p);
- parts.push(p);selection=p.id;renderParts();
+ parts.push(p);selection=p.id;renderParts();recordEdit();
  if(p.wingProblem)toast(p.wingProblem);
  else toast(bone?'Деталь на кости '+bone.name+'. Масштаб ограничен безопасным пределом.':
   'Кость '+anchor+' не найдена: использована фиксированная точка крепления '+anchor+' на теле (без скелета).');
@@ -443,7 +556,7 @@ function applyTypedTransform(){
  const pos=['pX','pY','pZ'].map(read),rot=['rX','rY','rZ'].map(read);
  if(![...pos,...rot].every(Number.isFinite)){toast('Нужны корректные координаты.');return;}
  p.config.position=pos;p.config.rotation=rot;
- placePart(p);
+ placePart(p);recordEdit();
 }
 for(const id of ['pX','pY','pZ','rX','rY','rZ']) $(id).addEventListener('change',applyTypedTransform);
 function setIntentionalScale(value){
@@ -453,6 +566,7 @@ function setIntentionalScale(value){
  p.config.scale=scale;placePart(p);
  $('pScale').value=String(Math.round(scale*10000)/10000);
  updateScaleStatus(p,limited);
+ recordEdit();
 }
 $('scaleApply').addEventListener('click',()=>{
  try{setIntentionalScale(parseScaleText($('pScale').value));}
@@ -489,13 +603,13 @@ function resetTransform(what){
  if(what==='position'||what==='all')p.config.position=[0,0,0];
  if(what==='rotation'||what==='all')p.config.rotation=[0,0,0];
  if(what==='all')p.config.scale=limitAccessoryScale(1,p.sourceSpan*(p.config.type==='wings'?Math.max(1,p.config.wingStretch):1),avatarHeight,p.config.type).scale;
- placePart(p);updateTransformFields(p);updateScaleStatus(p);
+ placePart(p);updateTransformFields(p);updateScaleStatus(p);recordEdit();
 }
 $('resetPosition').addEventListener('click',()=>resetTransform('position'));
 $('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
 $('resetAll').addEventListener('click',()=>resetTransform('all'));
-$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);if(p.wingClip)wingMixer.clipAction(p.wingClip).stop();dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
-$('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
+$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);if(p.wingClip)wingMixer.clipAction(p.wingClip).stop();dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();history.clear();recordEdit();});
+$('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();recordEdit();});
 $('saveJson').addEventListener('click',async()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
  try{
@@ -507,34 +621,44 @@ $('saveJson').addEventListener('click',async()=>{
   else error(e);
  }
 });
-$('exportGlb').addEventListener('click',async()=>{
+$('projectFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];
+ if(file)try{await loadBase(file);}catch(err){error(err);}
+ e.target.value='';
+});
+async function saveCombinedGLB(asProject=false){
  if(!base){toast('Сначала загрузите модель');return;}
- const btn=$('exportGlb');btn.disabled=true;toast('Проверка завершения деформаций перед экспортом…');
+ const btn=asProject?$('saveProject'):$('exportGlb');
+ btn.disabled=true;
  try{
-  // Never export half-written vertex buffers from a chunked high-poly fold.
+  toast('Проверка завершения деформаций…');
   await Promise.all(parts.map(p=>p.wingTask).filter(Boolean));
-  // Skin inverse matrices should match the wing rest pose at export time.
-  for(const p of parts){if(p.wingRig&&p.wingClip){wingMixer.clipAction(p.wingClip).stop();poseWingRig(p.wingRig,0,p.config.wingFoldDirection);}}
-  if(parts.some(p=>p.wingProblem?.startsWith('Ошибка сгиба'))){throw new Error('Не удалось завершить сгиб крыльев. Экспорт отменён.');}
-  toast('Запекание добавленных деталей в GLB…');
-  // All attached accessory meshes belong to the avatar export hierarchy.
-  // Deformed wing geometry is already real BufferGeometry, not a shader effect.
+  for(const p of parts){
+   if(p.wingRig&&p.wingClip){wingMixer.clipAction(p.wingClip).stop();poseWingRig(p.wingRig,0,p.config.wingFoldDirection);}
+   if(p.tailRig&&p.tailClip){wingMixer.clipAction(p.tailClip).stop();poseTailRig(p.tailRig,0,0);}
+  }
+  if(parts.some(p=>p.wingProblem?.startsWith('Ошибка сгиба')))throw new Error('Сгиб крыльев завершился ошибкой');
+  // A complete editable project retains even hidden accessory geometry.
+  const included=parts.filter(p=>asProject||p.config.visible);
+  avatar.userData.phoenixProject=serializeProject(included,modelName);
+  // Keep the inner attachment groups as nodes, never fuse their materials/skin.
+  const animations=[...clips,...parts.flatMap(p=>[p.wingClip,p.tailClip]).filter(Boolean)];
   const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
-   binary:true,onlyVisible:true,animations:[...clips,...parts.map(p=>p.wingClip).filter(Boolean)]
+   binary:true,onlyVisible:!asProject,animations
   }));
-  // Verify attachment IDs via the GLB JSON chunk. Parsing it without
-  // reloading all textures/meshes avoids doubling memory on Android.
-  const expected=parts.filter(p=>p.config.visible).map(p=>p.id);
-  const info=inspectGLBBytes(exported,expected);
-  toast('Проверено: '+expected.length+' из '+expected.length+' деталей внутри GLB. Выбери папку…');
-  await saveOutput(exported,'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
+  const required=included.map(p=>p.id);
+  const result=inspectGLBBytes(exported,required);
+  await saveOutput(exported,asProject?'Phoenix_VR_Editable_Project.glb':'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  toast('GLB сохранён: '+info.meshes+' мешей, '+expected.length+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
+  toast((asProject?'Проект':'Аватар')+' сохранён: '+result.meshes+' мешей, '+required.length+' деталей. Все слои остались внутри GLB.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
   else error(e);
  }finally{btn.disabled=false;}
-});
+}
+$('exportGlb').addEventListener('click',()=>saveCombinedGLB(false));
+$('saveProject').addEventListener('click',()=>saveCombinedGLB(true));
+
 window.addEventListener('dragover',e=>e.preventDefault());
 window.addEventListener('drop',async e=>{e.preventDefault();const f=[...(e.dataTransfer?.files||[])].find(f=>f.name.toLowerCase().endsWith('.glb'));if(f)try{await loadBase(f)}catch(err){error(err)}});

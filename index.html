@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.8 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.9 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
@@ -66,9 +66,20 @@
 </div>
 
 </section>
+<section id="tailSection"><h2>🐉 2Б · Хвост: кости и анимация</h2>
+<div class="hint">Для импортированного хвоста можно создать 3 управляющих сустава и автоматические веса. Угол изгиба и анимация записываются в GLB.</div>
+<label>Выбор хвоста<select id="tailTarget"><option value="">— Выбери хвост в списке —</option></select></label>
+<div class="two"><label>Ось хвоста<select id="tailAxis"><option value="auto">Авто</option><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select></label><label>Корень хвоста<select id="tailRootSide"><option value="min">У начала оси</option><option value="max">У конца оси</option></select></label></div>
+<button id="rigTail" type="button">🦴 Создать 3 сустава хвоста</button>
+<div class="two"><button id="previewTail" type="button">▶ Анимация хвоста</button><button id="stopTail" type="button">■ Остановить</button></div>
+<div id="tailStatus" class="wing-status" role="status">Загрузи хвост GLB; скелет создаётся отдельно от костей тела.</div></section>
 <section><h2>3 · Мимика / Blend Shapes</h2><div id="morphs" class="group"><span class="hint">Доступные ползунки появятся после импорта модели с Blend Shapes.</span></div></section>
 <section><h2>4 · Готовность аватара</h2><div id="metrics" class="metrics">Загрузите модель для проверки.</div><div class="hint">Это предварительная проверка. SDK, Eye View, Avatar Descriptor, PhysBones и лимиты PC/Quest проверяются в Unity.</div></section>
-<section><h2>5 · Сохранение и экспорт</h2><div class="two"><button id="saveJson">Настройки JSON</button><button id="exportGlb" class="primary">Сохранить GLB…</button></div><div class="hint">На Android открывается системный выбор места сохранения. JSON не содержит файлы моделей. GLB объединяет сцену, но не преобразует автоматически её в загружаемый VRChat-аватар.</div></section>
+<section><h2>5 · Сохранение, проект и история</h2>
+<div class="two"><button id="undoEdit" type="button" disabled>↶ Отменить</button><button id="redoEdit" type="button" disabled>↷ Повторить</button></div>
+<div class="hint">Undo/Redo: положение, поворот, размер, видимость и настройки сгиба. Добавление и удаление деталей пока не включены в историю.</div>
+<label>Открыть редактируемый проект (GLB)<input id="projectFile" type="file" accept=".glb,model/gltf-binary"></label>
+<button id="saveProject" type="button" class="primary">💾 Сохранить проект GLB…</button><div class="two"><button id="saveJson">Настройки JSON</button><button id="exportGlb" class="primary">Сохранить GLB…</button></div><div class="hint">На Android открывается системный выбор места сохранения. Редактируемый GLB содержит модели и настройки; JSON остаётся отдельным файлом без геометрии. GLB объединяет сцену, но не преобразует автоматически её в загружаемый VRChat-аватар.</div></section>
 </aside>
 <div class="viewport"><canvas id="canvas"></canvas><div class="toast" id="toast">Выбери демонстрационного персонажа или импортируй свой GLB.</div><div class="legend">Поворот: 1 палец · Масштаб: 2 пальца / колёсико · Перемещение: 2 пальца</div></div>
 </main>
