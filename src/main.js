@@ -11,6 +11,7 @@ import {createWingBoneRig,makeWingFlapClip,poseWingRig} from './wing-rig.mjs';
 import {createTailRig,makeTailWagClip,poseTailRig} from './tail-rig.mjs';
 import {serializeProject,readEmbeddedProject,TransformHistory} from './project-state.mjs';
 import {findWeightSources,transferClothingWeights,clothingStatus,MAX_GARMENT_VERTICES} from './clothing-weights.mjs';
+import {prepareFlare,applyFlare,getHemHandle,autoFitClothing} from './clothing-fit.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -32,6 +33,94 @@ const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
 let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1,baseBoundingBox=null;
 let wingMixer=new THREE.AnimationMixer(avatar);
+const hemHandle=new THREE.Mesh(
+ new THREE.SphereGeometry(1,16,12),
+ new THREE.MeshBasicMaterial({color:0xffc430,depthTest:false,transparent:true,opacity:.95})
+);
+hemHandle.name='EditorHemDragHandle';hemHandle.renderOrder=9999;hemHandle.visible=false;scene.add(hemHandle);
+const hemRay=new THREE.Raycaster(),hemPointer=new THREE.Vector2(),hemPlane=new THREE.Plane(),hemPoint=new THREE.Vector3();
+let hemEditEnabled=false,hemDrag=null;
+function canEditHem(p){
+ return p?.config.type==='clothing'&&!p?.clothingWeighted&&!p?.container?.getObjectByProperty('isSkinnedMesh',true);
+}
+function ensureHem(p){
+ if(!canEditHem(p))return null;
+ if(!p.flareModifier)p.flareModifier=prepareFlare(p.container);
+ return p.flareModifier;
+}
+function updateHemHandle(){
+ const p=selected();
+ const ok=hemEditEnabled&&canEditHem(p)&&p?.flareModifier;
+ hemHandle.visible=!!ok;
+ if(ok){
+  const handle=getHemHandle(p.flareModifier,p.config.hemFlare||1);
+  hemHandle.position.copy(handle.world);
+  hemHandle.scale.setScalar(Math.max(.03,avatarHeight*.055));
+ }
+}
+function changeHem(factor,record=true){
+ const p=selected();if(!canEditHem(p))return;
+ const mod=ensureHem(p);
+ const value=THREE.MathUtils.clamp(factor,.7,3);
+ applyFlare(mod,value,p.config.hemStart||.7);
+ p.config.hemFlare=value;
+ $('flareValue').value=String(Math.round(value*100)/100);
+ updateHemHandle();
+ if(record)recordEdit();
+}
+function hemPointerCoordinates(e){
+ const rect=canvas.getBoundingClientRect();
+ hemPointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
+ hemRay.setFromCamera(hemPointer,camera);
+}
+canvas.addEventListener('pointerdown',e=>{
+ const p=selected();if(!hemEditEnabled||!canEditHem(p))return;
+ const mod=ensureHem(p);hemPointerCoordinates(e);
+ let startPoint=null;
+ const ballHit=hemRay.intersectObject(hemHandle,false);
+ if(ballHit.length)startPoint=ballHit[0].point.clone();
+ else {
+  const meshes=[];p.container.traverse(o=>{if(o.isMesh)meshes.push(o);});
+  const hits=hemRay.intersectObjects(meshes,false);
+  if(hits.length){
+   const local=mod.root.worldToLocal(hits[0].point.clone());
+   const height=mod.max.y-mod.min.y;
+   if(local.y<mod.min.y+height*.18)startPoint=hits[0].point.clone();
+  }
+ }
+ if(!startPoint)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ const center=getHemHandle(mod,p.config.hemFlare||1).center;
+ hemPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,1,0),startPoint);
+ hemDrag={id:e.pointerId,part:p,startX:e.clientX,startY:e.clientY,
+  base:p.config.hemFlare||1,
+  radius:Math.max(.001,getHemHandle(mod,1).radius),
+  center,originRadius:new THREE.Vector2(startPoint.x-center.x,startPoint.z-center.z).length()};
+ orbit.enabled=false;
+ canvas.setPointerCapture?.(e.pointerId);
+},true);
+canvas.addEventListener('pointermove',e=>{
+ if(!hemDrag||e.pointerId!==hemDrag.id)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ hemPointerCoordinates(e);
+ let delta=(e.clientX-hemDrag.startX)*.006;
+ if(hemRay.ray.intersectPlane(hemPlane,hemPoint)){
+  const dist=new THREE.Vector2(hemPoint.x-hemDrag.center.x,hemPoint.z-hemDrag.center.z).length();
+  delta=(dist-hemDrag.originRadius)/hemDrag.radius;
+ }
+ selection=hemDrag.part.id;
+ changeHem(hemDrag.base+delta,false);
+},true);
+function endHemDrag(e){
+ if(!hemDrag||e.pointerId!==hemDrag.id)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ orbit.enabled=true;
+ canvas.releasePointerCapture?.(e.pointerId);
+ hemDrag=null;recordEdit();
+}
+canvas.addEventListener('pointerup',endHemDrag,true);
+canvas.addEventListener('pointercancel',endHemDrag,true);
+
 const history=new TransformHistory(80);
 let historyApplying=false;
 function snapshot(){return parts.map(p=>({id:p.id,config:structuredClone(p.config)}));}
@@ -42,6 +131,7 @@ async function applySnapshot(state){
  try{
   for(const data of state){const p=parts.find(x=>x.id===data.id);if(!p)continue;
    p.config=structuredClone(data.config);placePart(p);
+   if(p.flareModifier&&canEditHem(p))applyFlare(p.flareModifier,p.config.hemFlare||1,p.config.hemStart||.7);
    if(p.wingSource&&!p.wingRig)await queueWingDeformation(p);
   }
   renderParts();
@@ -114,6 +204,7 @@ async function loadBase(file){
  for(const p of parts){p.removed=true;p.container.parent?.remove(p.container);}
  parts=[];selection=null;
  if(base){avatar.remove(base);dispose(base);}
+ hemEditEnabled=false;hemHandle.visible=false;hemDrag=null;
  base=gltf.scene;base.name='BaseAvatar';avatar.add(base);modelName=file.name||'avatar.glb';clips=gltf.animations||[];
  const avatarBox=new THREE.Box3().setFromObject(base);
  avatarHeight=Math.max(.1,avatarBox.getSize(new THREE.Vector3()).y);
@@ -152,6 +243,8 @@ function recoverParts(project){
    }
   }else if(record.type==='clothing'){
    p.clothingWeighted=!!container.getObjectByProperty('isSkinnedMesh',true);
+   // The imported GLB geometry is already baked; new edits use it as baseline.
+   if(!p.clothingWeighted)p.config.hemFlare=1;
   }else if(record.type==='tail'){
    p.tailVertices=countPartVertices(container);
    p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
@@ -547,11 +640,67 @@ $('transferWeights').addEventListener('click',async()=>{
   p.clothingWeighted=true;
   p.weightSource=body.name||'body';
   recordEdit();renderParts();
+  hemEditEnabled=false;hemHandle.visible=false;
   $('weightStatus').textContent='✅ Готово: '+result.vertices+' вершин, '+result.meshes+' мешей. Привязано к костям персонажа, без двойной привязки к груди.';
   toast('Веса одежды перенесены на '+result.vertices+' вершин. Можно проверить плечи и ноги.');
  }catch(e){error(e);$('weightStatus').textContent='⚠️ '+(e?.message||String(e));}
  finally{if(!p?.clothingWeighted)button.disabled=false;}
 });
+function updateFitUI(){
+ const p=selected(),ready=canEditHem(p);
+ for(const id of ['autoFitClothes','flareMinus','flarePlus','flareApply','hemHandleToggle','flareReset']){
+  $(id).disabled=!ready;
+ }
+ if(!ready){
+  hemHandle.visible=false;
+  $('fitStatus').textContent=p?.config.type==='clothing'
+   ? 'Одежда уже заригана: форму надо менять до переноса весов.'
+   : 'Выбери импортированную деталь с типом «👕 Одежда».';
+ }else{
+  $('flareValue').value=String(Math.round((p.config.hemFlare||1)*100)/100);
+  $('fitStatus').textContent=p.fitStatus||'Сначала «Авто-подгонка», затем потяни подол или нажимай + / −.';
+ }
+ $('hemHandleToggle').textContent=hemEditEnabled?'🟡 Скрыть ручку':'🟡 Показать ручку подола';
+ updateHemHandle();
+}
+$('autoFitClothes').addEventListener('click',async()=>{
+ const p=selected();if(!canEditHem(p))return;
+ if(p.fitBusy)return;
+ p.fitBusy=true;const btn=$('autoFitClothes');btn.disabled=true;
+ try{
+  restorePosePreview();
+  const bodies=findWeightSources(base),body=bodies[Number($('weightSource').value)]||bodies[0];
+  if(!body)throw new Error('Для облегания нужен зариганный меш тела');
+  const result=await autoFitClothing(p.container,body,{
+   style:$('fitStyle').value,strength:Number($('fitStrength').value),
+   clearance:Math.max(.003,avatarHeight*.006),
+   onProgress:(done,total)=>{$('fitStatus').textContent='✨ Подгонка: '+done.toLocaleString('ru-RU')+' вершин…';}
+  });
+  // Auto-fit changes both transform and mesh; take fresh baseline for hem.
+  readObjectTransform(p);p.flareModifier=null;
+  p.config.hemFlare=1;
+  ensureHem(p);recordEdit();
+  p.fitStatus='✅ Подгонка применена, обработано '+result.modified+' вершин. Теперь тяни жёлтую ручку у подола.';
+  toast(p.fitStatus);
+ }catch(e){error(e);p.fitStatus='⚠️ '+(e?.message||String(e));}
+ finally{p.fitBusy=false;btn.disabled=false;updateFitUI();updateTransformFields(p);}
+});
+$('flareMinus').addEventListener('click',()=>changeHem((selected()?.config.hemFlare||1)-.1));
+$('flarePlus').addEventListener('click',()=>changeHem((selected()?.config.hemFlare||1)+.1));
+$('flareApply').addEventListener('click',()=>{
+ try{
+  const value=Number(String($('flareValue').value).trim().replace(',','.'));
+  if(!Number.isFinite(value)||value<.7||value>3)throw new Error('Подол: укажи число от 0,7 до 3');
+  changeHem(value);
+ }catch(e){error(e);}
+});
+$('flareValue').addEventListener('keydown',e=>{if(e.key==='Enter'){$('flareApply').click();$('flareValue').blur();}});
+$('hemHandleToggle').addEventListener('click',()=>{
+ if(!canEditHem(selected()))return;
+ try{ensureHem(selected());hemEditEnabled=!hemEditEnabled;updateFitUI();}
+ catch(e){error(e);}
+});
+$('flareReset').addEventListener('click',()=>changeHem(1));
 $('poseCheck').addEventListener('click',()=>{
  if(!base)return;
  restorePosePreview();
@@ -586,6 +735,8 @@ function renderParts(){
  renderWingPanel();
  updateTailPanel();
  updateClothingPanel();
+ updateFitUI();
+ updateHemHandle();
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
