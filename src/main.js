@@ -11,7 +11,7 @@ import {createWingBoneRig,makeWingFlapClip,poseWingRig} from './wing-rig.mjs';
 import {createTailRig,makeTailWagClip,poseTailRig} from './tail-rig.mjs';
 import {serializeProject,readEmbeddedProject,TransformHistory} from './project-state.mjs';
 import {findWeightSources,transferClothingWeights,clothingStatus,MAX_GARMENT_VERTICES} from './clothing-weights.mjs';
-import {prepareFlare,applyFlare,getHemHandle,autoFitClothing} from './clothing-fit.mjs';
+import {prepareFlare,applyFlare,getHemHandle,autoFitClothing,findFitSources} from './clothing-fit.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -648,6 +648,16 @@ $('transferWeights').addEventListener('click',async()=>{
 });
 function updateFitUI(){
  const p=selected(),ready=canEditHem(p);
+ const options=$('fitBodySource'),old=options.value;
+ const sources=findFitSources(base);
+ options.replaceChildren();
+ for(let i=0;i<sources.length;i++){
+  const o=document.createElement('option');o.value=String(i);
+  o.textContent=(sources[i].name||'Mesh '+(i+1))+(sources[i].isSkinnedMesh?' 🦴':'')+' · '+sources[i].geometry.getAttribute('position').count.toLocaleString('ru-RU')+' вершин';
+  options.append(o);
+ }
+ options.value=sources.length&&Number(old)<sources.length&&old!==''?old:sources.length?'0':'';
+
  for(const id of ['autoFitClothes','flareMinus','flarePlus','flareApply','hemHandleToggle','flareReset']){
   $(id).disabled=!ready;
  }
@@ -669,8 +679,8 @@ $('autoFitClothes').addEventListener('click',async()=>{
  p.fitBusy=true;const btn=$('autoFitClothes');btn.disabled=true;
  try{
   restorePosePreview();
-  const bodies=findWeightSources(base),body=bodies[Number($('weightSource').value)]||bodies[0];
-  if(!body)throw new Error('Для облегания нужен зариганный меш тела');
+  const bodies=findFitSources(base),body=bodies[Number($('fitBodySource').value)]||bodies[0];
+  if(!body)throw new Error('Загрузи меш тела для подгонки');
   const result=await autoFitClothing(p.container,body,{
    style:$('fitStyle').value,strength:Number($('fitStrength').value),
    clearance:Math.max(.003,avatarHeight*.006),
