@@ -12,6 +12,8 @@ import {createTailRig,makeTailWagClip,poseTailRig} from './tail-rig.mjs';
 import {serializeProject,readEmbeddedProject,TransformHistory} from './project-state.mjs';
 import {findWeightSources,transferClothingWeights,clothingStatus,MAX_GARMENT_VERTICES} from './clothing-weights.mjs';
 import {prepareFlare,applyFlare,getHemHandle,autoFitClothing,findFitSources} from './clothing-fit.mjs';
+import {createBodyCage} from './body-cage.mjs';
+import {smartDress as runSmartDress} from './smart-fit.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -32,6 +34,10 @@ const grid=new THREE.GridHelper(12,24,0x57586a,0x2e3342);grid.position.y=-.012;s
 const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
 let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1,baseBoundingBox=null;
+let bodyCage=null,smartBusy=false;
+function releaseBodyCage(){
+ if(bodyCage){bodyCage.dispose();bodyCage=null;}
+}
 let wingMixer=new THREE.AnimationMixer(avatar);
 const hemHandle=new THREE.Mesh(
  new THREE.SphereGeometry(1,16,12),
@@ -205,6 +211,7 @@ async function loadBase(file){
  parts=[];selection=null;
  if(base){avatar.remove(base);dispose(base);}
  hemEditEnabled=false;hemHandle.visible=false;hemDrag=null;
+ releaseBodyCage();
  base=gltf.scene;base.name='BaseAvatar';avatar.add(base);modelName=file.name||'avatar.glb';clips=gltf.animations||[];
  const avatarBox=new THREE.Box3().setFromObject(base);
  avatarHeight=Math.max(.1,avatarBox.getSize(new THREE.Vector3()).y);
@@ -646,6 +653,109 @@ $('transferWeights').addEventListener('click',async()=>{
  }catch(e){error(e);$('weightStatus').textContent='⚠️ '+(e?.message||String(e));}
  finally{if(!p?.clothingWeighted)button.disabled=false;}
 });
+function getSmartBody(){
+ const sources=findFitSources(base);
+ return sources[Number($('smartBodySource').value)]||sources[0]||null;
+}
+function updateSmartPanel(){
+ const selector=$('smartBodySource'),old=selector.value;
+ const sources=findFitSources(base);
+ selector.replaceChildren();
+ for(let i=0;i<sources.length;i++){
+  const option=document.createElement('option');
+  option.value=String(i);
+  option.textContent=(sources[i].name||'Меш '+(i+1))+' · '+sources[i].geometry.getAttribute('position').count.toLocaleString('ru-RU')+' вершин';
+  selector.append(option);
+ }
+ selector.value=sources.length&&old!==''&&Number(old)<sources.length?old:sources.length?'0':'';
+ const p=selected(),ready=p?.config.type==='clothing'
+  &&!p?.clothingWeighted&&!p.container?.getObjectByProperty('isSkinnedMesh',true);
+ $('buildBodyCage').disabled=!sources.length||smartBusy;
+ $('toggleBodyCage').disabled=!bodyCage||smartBusy;
+ $('smartDress').disabled=!sources.length||!ready||smartBusy;
+ $('toggleBodyCage').textContent=bodyCage?.mesh.visible?'🙈 Скрыть оболочку':'👁 Показать оболочку';
+ $('smartFitStatus').textContent=smartBusy?'⏳ SmartFit работает…'
+  : p?.smartFitStatus||(!sources.length?'Загрузи персонажа GLB.'
+   : !ready?'Импортируй одежду GLB с типом «👕 Одежда», выбери её в списке.'
+    : bodyCage?'✅ Body Cage готова: '+bodyCage.triangles.toLocaleString('ru-RU')+' треугольников. Нажми «Надеть».'
+     :'Готово к созданию облегчённой оболочки тела. Нажми «Надеть» для автоматического процесса.');
+}
+async function ensureBodyCage(){
+ const source=getSmartBody(),topFraction=Number($('smartCageTop').value);
+ if(!source)throw new Error('Загрузи модель персонажа и выбери поверхность тела');
+ if(bodyCage?.source===source&&bodyCage.topFraction===topFraction)return bodyCage;
+ releaseBodyCage();
+ const created=await createBodyCage(source,{maxTriangles:48000,topFraction,
+  onProgress:(done,total)=>{
+   $('smartFitStatus').textContent='Создание оболочки: '+Math.round(done/total*100)+'%';
+  }});
+ bodyCage=created;
+ scene.add(created.mesh);
+ created.mesh.visible=true;
+ return created;
+}
+$('smartBodySource').addEventListener('change',()=>{
+ releaseBodyCage();updateSmartPanel();
+});
+$('smartCageTop').addEventListener('change',()=>{
+ releaseBodyCage();updateSmartPanel();
+});
+$('buildBodyCage').addEventListener('click',async()=>{
+ if(smartBusy)return;smartBusy=true;
+ try{
+  const cage=await ensureBodyCage();
+  $('smartFitStatus').textContent='✅ Оболочка готова: '+cage.triangles.toLocaleString('ru-RU')+' из '+cage.originalTriangles.toLocaleString('ru-RU')+' треугольников. Тело не изменено.';
+  toast('Body Cage создана без изменений оригинального GLB.');
+ }catch(e){error(e);$('smartFitStatus').textContent='⚠️ '+(e?.message||String(e));}
+ finally{smartBusy=false;updateSmartPanel();}
+});
+$('toggleBodyCage').addEventListener('click',()=>{
+ if(!bodyCage)return;
+ bodyCage.mesh.visible=!bodyCage.mesh.visible;updateSmartPanel();
+});
+$('smartDress').addEventListener('click',async()=>{
+ const p=selected();
+ if(smartBusy||!p||p.config.type!=='clothing'||p.clothingWeighted)return;
+ smartBusy=true;let stage='error';
+ try{
+  restorePosePreview();
+  // Do not modify the imported body mesh; only this attachment is edited.
+  const cage=await ensureBodyCage(),source=getSmartBody();
+  cage.mesh.visible=false;
+  const result=await runSmartDress(p.container,{
+   cage,body:source,style:$('smartClothesStyle').value,
+   strength:.72,clearance:Math.max(.003,avatarHeight*.006),
+   maxWeightDistance:Math.min(3,avatarHeight*.30),
+   onProgress:(step,done,total)=>{
+    $('smartFitStatus').textContent=(step==='fit'?'Подгонка формы: ':'Перенос весов: ')+Math.round(done/total*100)+'%';
+   }
+  });
+  stage=result.stage;
+  p.flareModifier=null;
+  p.config.hemFlare=1;
+  readObjectTransform(p);
+  if(stage==='skinned'){
+   // A garment tied to a chest bone would be transformed twice.
+   avatar.attach(p.container);
+   if(p.fallback){p.fallback.parent?.remove(p.fallback);p.fallback=null;}
+   p.config.anchor='root';
+   p.container.userData.avatarPart.anchor='root';
+   readObjectTransform(p);
+   p.clothingWeighted=true;
+  }
+  p.smartFitStatus=stage==='skinned'
+   ?'✅ Готово: одежда подогнана и привязана к '+source.skeleton.bones.length+' костям. Можно проверять анимацию и сохранять GLB.'
+   :result.warning;
+  recordEdit();
+  renderParts();
+  toast(p.smartFitStatus);
+ }catch(e){error(e);p.smartFitStatus='⚠️ '+(e?.message||String(e));}
+ finally{
+  smartBusy=false;
+  updateSmartPanel();updateFitUI();
+ }
+});
+
 function updateFitUI(){
  const p=selected(),ready=canEditHem(p);
  const options=$('fitBodySource'),old=options.value;
@@ -746,6 +856,7 @@ function renderParts(){
  updateTailPanel();
  updateClothingPanel();
  updateFitUI();
+ updateSmartPanel();
  updateHemHandle();
 }
 async function addPart(file){
