@@ -6,6 +6,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportProjectMetadata} from './avatar-core.mjs';
 import {captureWingGeometry,deformWingGeometry,deformWingGeometryAsync,detectWingSpanAxis} from './wing-geometry.mjs';
 import {saveOutput} from './save-output.mjs';
+import {inspectGLBBytes} from './glb-verify.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -472,19 +473,15 @@ $('exportGlb').addEventListener('click',async()=>{
   const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
    binary:true,onlyVisible:true,animations:clips
   }));
-  const roundtrip=await new Promise((resolve,reject)=>loader.parse(exported,'',resolve,reject));
-  const expected=parts.filter(p=>p.config.visible).length;
-  let recovered=0;
-  roundtrip.scene.traverse(o=>{if(o.userData?.avatarPart?.id)recovered++;});
-  if(recovered<expected)throw new Error('Проверка запекания: найдено '+recovered+' деталей из '+expected+'. Сохранение отменено.');
-  const info=inspectAvatar(roundtrip.scene);
-  if(info.meshes<1)throw new Error('GLB после повторного открытия не содержит мешей.');
-  toast('Проверено: '+recovered+'/'+expected+' деталей внутри GLB. Выбери папку…');
+  // Verify attachment IDs via the GLB JSON chunk. Parsing it without
+  // reloading all textures/meshes avoids doubling memory on Android.
+  const expected=parts.filter(p=>p.config.visible).map(p=>p.id);
+  const info=inspectGLBBytes(exported,expected);
+  toast('Проверено: '+expected.length+' из '+expected.length+' деталей внутри GLB. Выбери папку…');
   await saveOutput(exported,'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  toast('GLB сохранён: '+info.meshes+' мешей, '+recovered+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
-  dispose(roundtrip.scene);
+  toast('GLB сохранён: '+info.meshes+' мешей, '+expected.length+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
   else error(e);
