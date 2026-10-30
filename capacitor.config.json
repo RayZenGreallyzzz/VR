@@ -1,6 +1,6 @@
 {
-  "appId": "com.rayzen.phoenixvravatarstudio.preview11",
-  "appName": "Phoenix VR Studio v1.1",
+  "appId": "com.rayzen.phoenixvravatarstudio.preview12",
+  "appName": "Phoenix VR Studio v1.2",
   "webDir": "dist",
   "android": {
     "backgroundColor": "#101219"

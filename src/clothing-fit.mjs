@@ -114,7 +114,7 @@ export async function autoFitClothing(root,body,{
  style='dress',strength=.7,clearance=.015,
  chunkSize=1500,onProgress=()=>{},yieldControl=tick
 }={}){
- if(!['dress','top','skirt'].includes(style)||!Number.isFinite(strength)||strength<0||strength>1)
+ if(!['dress','top','skirt','pants'].includes(style)||!Number.isFinite(strength)||strength<0||strength>1)
   throw new Error('Неправильный режим подгонки');
  if(!Number.isFinite(clearance)||clearance<=0||clearance>1)throw new Error('Неправильный зазор одежды');
  const meshes=clothingMeshes(root);
@@ -128,7 +128,7 @@ export async function autoFitClothing(root,body,{
   const bsize=bodyBox.getSize(new THREE.Vector3());
   if(bsize.y<.1)throw new Error('Слишком маленькое тело для авто-подгонки');
   const cx=(bodyBox.min.x+bodyBox.max.x)/2,cz=(bodyBox.min.z+bodyBox.max.z)/2;
-  const lower=bodyBox.min.y+bsize.y*.60,upper=bodyBox.min.y+bsize.y*.83;
+  const lower=bodyBox.min.y+bsize.y*(style==='pants'?.40:.60),upper=bodyBox.min.y+bsize.y*(style==='pants'?.65:.83);
   const bodyTorso=atBandWidth(bodyGeo,lower,upper,cx)||bsize.x*.65;
   const gBox=new THREE.Box3().setFromObject(root),gsize=gBox.getSize(new THREE.Vector3());
   if(gsize.y<=1e-6||gsize.x<=1e-6)throw new Error('Одежда не имеет объёма');
@@ -148,7 +148,7 @@ export async function autoFitClothing(root,body,{
   root.updateWorldMatrix(true,true);
   const scaledBox=new THREE.Box3().setFromObject(root);
   const scaledCenter=scaledBox.getCenter(new THREE.Vector3());
-  const goalTop=bodyBox.min.y+bsize.y*(style==='skirt'?.59:style==='top'?.88:.89);
+  const goalTop=bodyBox.min.y+bsize.y*(style==='skirt'?.59:style==='pants'?.62:style==='top'?.88:.89);
   const delta=new THREE.Vector3(cx-scaledCenter.x,goalTop-scaledBox.max.y,cz-scaledCenter.z);
   const parent=root.parent;
   if(parent){
@@ -171,7 +171,7 @@ export async function autoFitClothing(root,body,{
     vWorld.fromBufferAttribute(attr,i).applyMatrix4(mesh.matrixWorld);
     const yRatio=(vWorld.y-bodyBox.min.y)/bsize.y;
     // Keep dress/skirt volume below the hips intact. Hips transition smoothly.
-    const lowerFade=style==='top'?1:style==='dress'?clamp((yRatio-.51)/.16,0,1):clamp((yRatio-.51)/.12,0,1);
+    const lowerFade=style==='top'?1:style==='pants'?clamp((.7-yRatio)/.55,0,1):style==='dress'?clamp((yRatio-.51)/.16,0,1):clamp((yRatio-.51)/.12,0,1);
     if(lowerFade>0){
      const h=bvh.closestPointToPoint(vWorld,hit,0,maxDist);
      if(h){
