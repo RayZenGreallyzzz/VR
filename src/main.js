@@ -391,6 +391,52 @@ $('makeWings').addEventListener('click',()=>{
  else toast(p.wingProblem||'Не удалось подготовить крылья');
  renderParts();
 });
+const MAX_TAIL_RIG_VERTICES=250_000;
+function updateTailPanel(){
+ const picker=$('tailTarget'),p=selected();
+ picker.replaceChildren();
+ const empty=document.createElement('option');empty.value='';empty.textContent='— Выбери хвост —';picker.append(empty);
+ for(const detail of parts.filter(q=>q.config.type==='tail')){
+  const o=document.createElement('option');o.value=detail.id;o.textContent=detail.config.name;picker.append(o);
+ }
+ picker.value=p?.config.type==='tail'?p.id:'';
+ const isTail=p?.config.type==='tail',skinned=p?.tailSkinned;
+ $('rigTail').disabled=!isTail||!!p.tailRig||!!skinned||p.tailVertices>MAX_TAIL_RIG_VERTICES;
+ $('previewTail').disabled=!p?.tailRig;$('stopTail').disabled=!p?.tailRig;
+ $('tailStatus').textContent=!isTail
+  ? 'Выбери импортированный хвост. Риг создаётся отдельно от скелета персонажа.'
+  : p.tailRig
+   ? '✅ Хвост с 3 суставами и анимацией. Можно запустить предпросмотр и экспортировать GLB.'
+   : skinned
+    ? 'ℹ️ У этого хвоста уже есть скин и кости. Повторный автоскининг отключён.'
+    : p.tailVertices>MAX_TAIL_RIG_VERTICES
+     ? '⚠️ Для мобильного авторигинга нужно не более '+MAX_TAIL_RIG_VERTICES.toLocaleString('ru-RU')+' вершин. Сейчас: '+p.tailVertices.toLocaleString('ru-RU')
+     : 'Готово к автоматическому созданию 3 суставов хвоста.';
+}
+$('tailTarget').addEventListener('change',e=>{
+ const chosen=parts.find(p=>p.id===e.target.value);
+ selection=chosen?.id||null;renderParts();
+});
+$('rigTail').addEventListener('click',()=>{
+ const p=selected();if(p?.config.type!=='tail'||p.tailRig||p.tailSkinned||p.tailVertices>MAX_TAIL_RIG_VERTICES)return;
+ try{
+  const source=captureWingGeometry(p.container);
+  p.tailRig=createTailRig(source,{id:p.id,axis:$('tailAxis').value,base:$('tailRootSide').value});
+  p.tailClip=makeTailWagClip(p.tailRig,{amplitude:18,duration:2});
+  p.tailSkinned=true;
+  toast('Хвост зариган: 3 сустава, веса и клип покачивания готовы.');
+ }catch(e){error(e);}
+ updateTailPanel();
+});
+$('previewTail').addEventListener('click',()=>{
+ const p=selected();if(!p?.tailRig||!p.tailClip)return;
+ wingMixer.clipAction(p.tailClip).reset().play();toast('Анимация хвоста запущена');
+});
+$('stopTail').addEventListener('click',()=>{
+ const p=selected();if(!p?.tailRig||!p.tailClip)return;
+ wingMixer.clipAction(p.tailClip).stop();poseTailRig(p.tailRig,0,0);
+});
+
 function renderParts(){
  $('partsPanel').hidden=parts.length===0;const list=$('partList');list.replaceChildren();
  for(const p of parts){
@@ -403,6 +449,7 @@ function renderParts(){
  if(p)updateScaleStatus(p);
  if(p)updateTransformFields(p);
  renderWingPanel();
+ updateTailPanel();
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
@@ -430,9 +477,13 @@ async function addPart(file){
   fallback.add(container);
  }
  const p={id:config.id,config,container,sourceSpan,maxScale:sizeLimit.maxScale,fallback};
+ if(kind==='tail'){
+  p.tailVertices=countPartVertices(container);
+  p.tailSkinned=!!container.getObjectByProperty('isSkinnedMesh',true);
+ }
  placePart(p);
  if(kind==='wings')assignPartAsWings(p);
- parts.push(p);selection=p.id;renderParts();
+ parts.push(p);selection=p.id;renderParts();recordEdit();
  if(p.wingProblem)toast(p.wingProblem);
  else toast(bone?'Деталь на кости '+bone.name+'. Масштаб ограничен безопасным пределом.':
   'Кость '+anchor+' не найдена: использована фиксированная точка крепления '+anchor+' на теле (без скелета).');
@@ -464,7 +515,7 @@ function applyTypedTransform(){
  const pos=['pX','pY','pZ'].map(read),rot=['rX','rY','rZ'].map(read);
  if(![...pos,...rot].every(Number.isFinite)){toast('Нужны корректные координаты.');return;}
  p.config.position=pos;p.config.rotation=rot;
- placePart(p);
+ placePart(p);recordEdit();
 }
 for(const id of ['pX','pY','pZ','rX','rY','rZ']) $(id).addEventListener('change',applyTypedTransform);
 function setIntentionalScale(value){
@@ -474,6 +525,7 @@ function setIntentionalScale(value){
  p.config.scale=scale;placePart(p);
  $('pScale').value=String(Math.round(scale*10000)/10000);
  updateScaleStatus(p,limited);
+ recordEdit();
 }
 $('scaleApply').addEventListener('click',()=>{
  try{setIntentionalScale(parseScaleText($('pScale').value));}
@@ -510,13 +562,13 @@ function resetTransform(what){
  if(what==='position'||what==='all')p.config.position=[0,0,0];
  if(what==='rotation'||what==='all')p.config.rotation=[0,0,0];
  if(what==='all')p.config.scale=limitAccessoryScale(1,p.sourceSpan*(p.config.type==='wings'?Math.max(1,p.config.wingStretch):1),avatarHeight,p.config.type).scale;
- placePart(p);updateTransformFields(p);updateScaleStatus(p);
+ placePart(p);updateTransformFields(p);updateScaleStatus(p);recordEdit();
 }
 $('resetPosition').addEventListener('click',()=>resetTransform('position'));
 $('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
 $('resetAll').addEventListener('click',()=>resetTransform('all'));
-$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);if(p.wingClip)wingMixer.clipAction(p.wingClip).stop();dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
-$('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
+$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);if(p.wingClip)wingMixer.clipAction(p.wingClip).stop();dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();history.clear();recordEdit();});
+$('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();recordEdit();});
 $('saveJson').addEventListener('click',async()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
  try{
