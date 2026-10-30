@@ -2,6 +2,16 @@
 
 Separate avatar-customization app derived from the workflow of Rig Animation Studio **v7.9**. Does not modify the original animation editor.
 
+## v0.7 — bend heavier wings on Android
+
+- The 100,000 vertex **live edit** threshold remains for responsive small GLBs. From 100,001 to 600,000 wing vertices, folding uses asynchronous, cancellable 6,000-vertex batches and an in-panel progress indicator instead of blocking the screen.
+- Repeated slider movement coalesces updates; an obsolete partial bend is replaced by a full rebake from pristine vertex positions.
+- **GLB export waits until all active wing operations finish.** This prevents saving only the first part of a large wing mesh.
+- Safety: geometry beyond 600,000 wing vertices still cannot be live-bent on a 4 GB tablet without preprocessing; import and rigid positioning remain available.
+- The 25° and 30° mirrored fold presets, always-visible wing panel, and back attachment locator from prior versions remain.
+
+**Verification:** automated unit tests include a 120,003-vertex fold and cancellation/restore scenario. Android-specific stability still requires a real-device test, especially for texture-heavy GLBs.
+
 ## v0.6 — Wings editor stays visible
 
 - A permanent sidebar section **2A · Wing fold** shows even before a part is selected. No more disappearing "Fold back 25° / 30°" controls.
