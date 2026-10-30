@@ -619,34 +619,44 @@ $('saveJson').addEventListener('click',async()=>{
   else error(e);
  }
 });
-$('exportGlb').addEventListener('click',async()=>{
+$('projectFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];
+ if(file)try{await loadBase(file);}catch(err){error(err);}
+ e.target.value='';
+});
+async function saveCombinedGLB(asProject=false){
  if(!base){toast('Сначала загрузите модель');return;}
- const btn=$('exportGlb');btn.disabled=true;toast('Проверка завершения деформаций перед экспортом…');
+ const btn=asProject?$('saveProject'):$('exportGlb');
+ btn.disabled=true;
  try{
-  // Never export half-written vertex buffers from a chunked high-poly fold.
+  toast('Проверка завершения деформаций…');
   await Promise.all(parts.map(p=>p.wingTask).filter(Boolean));
-  // Skin inverse matrices should match the wing rest pose at export time.
-  for(const p of parts){if(p.wingRig&&p.wingClip){wingMixer.clipAction(p.wingClip).stop();poseWingRig(p.wingRig,0,p.config.wingFoldDirection);}}
-  if(parts.some(p=>p.wingProblem?.startsWith('Ошибка сгиба'))){throw new Error('Не удалось завершить сгиб крыльев. Экспорт отменён.');}
-  toast('Запекание добавленных деталей в GLB…');
-  // All attached accessory meshes belong to the avatar export hierarchy.
-  // Deformed wing geometry is already real BufferGeometry, not a shader effect.
+  for(const p of parts){
+   if(p.wingRig&&p.wingClip){wingMixer.clipAction(p.wingClip).stop();poseWingRig(p.wingRig,0,p.config.wingFoldDirection);}
+   if(p.tailRig&&p.tailClip){wingMixer.clipAction(p.tailClip).stop();poseTailRig(p.tailRig,0,0);}
+  }
+  if(parts.some(p=>p.wingProblem?.startsWith('Ошибка сгиба')))throw new Error('Сгиб крыльев завершился ошибкой');
+  // A complete editable project retains even hidden accessory geometry.
+  const included=parts.filter(p=>asProject||p.config.visible);
+  avatar.userData.phoenixProject=serializeProject(included,modelName);
+  // Keep the inner attachment groups as nodes, never fuse their materials/skin.
+  const animations=[...clips,...parts.flatMap(p=>[p.wingClip,p.tailClip]).filter(Boolean)];
   const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
-   binary:true,onlyVisible:true,animations:[...clips,...parts.map(p=>p.wingClip).filter(Boolean)]
+   binary:true,onlyVisible:!asProject,animations
   }));
-  // Verify attachment IDs via the GLB JSON chunk. Parsing it without
-  // reloading all textures/meshes avoids doubling memory on Android.
-  const expected=parts.filter(p=>p.config.visible).map(p=>p.id);
-  const info=inspectGLBBytes(exported,expected);
-  toast('Проверено: '+expected.length+' из '+expected.length+' деталей внутри GLB. Выбери папку…');
-  await saveOutput(exported,'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
+  const required=included.map(p=>p.id);
+  const result=inspectGLBBytes(exported,required);
+  await saveOutput(exported,asProject?'Phoenix_VR_Editable_Project.glb':'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  toast('GLB сохранён: '+info.meshes+' мешей, '+expected.length+' добавленных деталей. Они остаются отдельными мешами, не объединены с кожей.');
+  toast((asProject?'Проект':'Аватар')+' сохранён: '+result.meshes+' мешей, '+required.length+' деталей. Все слои остались внутри GLB.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
   else error(e);
  }finally{btn.disabled=false;}
-});
+}
+$('exportGlb').addEventListener('click',()=>saveCombinedGLB(false));
+$('saveProject').addEventListener('click',()=>saveCombinedGLB(true));
+
 window.addEventListener('dragover',e=>e.preventDefault());
 window.addEventListener('drop',async e=>{e.preventDefault();const f=[...(e.dataTransfer?.files||[])].find(f=>f.name.toLowerCase().endsWith('.glb'));if(f)try{await loadBase(f)}catch(err){error(err)}});
