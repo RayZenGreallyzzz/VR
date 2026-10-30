@@ -1,3 +1,11 @@
+## v1.2 — Phoenix SmartFit Body Cage (first working prototype)
+
+**One-button flow:** Load an avatar GLB, import garment as **👕 Одежда**, choose the source body surface, select *dress/top/pants/skirt*, tap **✨ Надеть выбранную одежду автоматически**. A lightweight Body Cage is generated if needed; it guides a shape/position fitting pass. On an already-rigged body, the app then attempts clothing weight transfer. On unrigged bodies, the operation fits the cloth but **explicitly reports** that rigging is still necessary for animation.
+
+**Body Cage:** Up to 48,000 sampled source triangles, processed in batches for mobile. Adapted to Meshy/Tripo's huge GLBs with hundreds of disconnected mesh islands — does not naively pick the biggest connected island. Optional upper-height cutoff (78%, 86%, 94%, or full model) helps exclude horns/hair; choose an appropriate body source for the costume. Green wireframe preview can be hidden. The sampled cage lives outside the saved avatar scene, so it **never replaces the original detailed mesh** and is **not exported**.
+
+**Current limitations:** This is a reduced triangle-surface proxy with BVH proximity fitting — **not a real volumetric SDF**, not universal semantic garment segmentation, not automatic underwear removal, not collision-free physical fabric, and **not automatic full-body rigging**. Shorts/top fused into a single texture/body mesh remain part of the source. A high-density rigged body may exceed the existing skin-transfer maximum (240k triangles); shape fit still completes with a clear warning. Long hair/antlers and strongly nonstandard body shapes may require manual cage cutoff and adjustment. The v1.2 Android build passes synthetic geometry tests; real-device fitting of the user's >0.7M-triangle male and >1.3M-triangle deer-woman GLBs still needs validation on the Android tablet.
+
 ## v1.1 — Put clothes on effortlessly + pull skirt hem outward
 
 1. Load the avatar (a skinned or ordinary GLB mesh) and import your GLB clothing using the **👕 Одежда** type.
