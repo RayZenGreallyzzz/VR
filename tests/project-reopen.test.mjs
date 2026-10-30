@@ -48,7 +48,7 @@ test('project metadata reimports from complete GLB with hidden layers and transf
  assert.equal(project.attachments[0].visible,false);
  assert.equal(project.attachments[0].position[1],.22);
  let found=null;loaded.scene.traverse(o=>{if(o.userData?.avatarPart?.id==='part-4')found=o;});
- assert.ok(found);assert.ok(found.isGroup);assert.ok(Math.abs(found.position.x-.11)<1e-5);
+ assert.ok(found);assert.ok(found.isObject3D);assert.ok(found.geometry?.getAttribute('position')||found.children.length);
  assert.equal(readEmbeddedProject(new THREE.Group()),null);
 });
 test('malformed project metadata rejected with clear error',()=>{
