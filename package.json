@@ -1,7 +1,7 @@
 {
   "name": "phoenix-vr-avatar-studio",
   "private": true,
-  "version": "0.9.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -13,7 +13,8 @@
   "dependencies": {
     "three": "^0.185.0",
     "@capacitor/core": "^7.0.0",
-    "@capacitor/android": "^7.0.0"
+    "@capacitor/android": "^7.0.0",
+    "three-mesh-bvh": "^0.9.16"
   },
   "devDependencies": {
     "vite": "^6.3.0",
