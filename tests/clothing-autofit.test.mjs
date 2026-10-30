@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {prepareFlare,applyFlare,getHemHandle,autoFitClothing} from '../src/clothing-fit.mjs';
+import {prepareFlare,applyFlare,getHemHandle,autoFitClothing,findFitSources} from '../src/clothing-fit.mjs';
 import {readFileSync} from 'node:fs';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -92,7 +92,7 @@ test('baked skirt flare is preserved after GLB export and re-import',async()=>{
 test('UI includes one-click body wrap, intentional hem expansion and 3D touch drag',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
- for(const id of ['dressFitSection','fitStyle','fitStrength','autoFitClothes','flareMinus','flarePlus','flareApply','flareValue','hemHandleToggle','flareReset','fitStatus']){
+ for(const id of ['dressFitSection','fitBodySource','fitStyle','fitStrength','autoFitClothes','flareMinus','flarePlus','flareApply','flareValue','hemHandleToggle','flareReset','fitStatus']){
   assert.ok(html.includes('id="'+id+'"'),id);
  }
  assert.match(main,/autoFitClothing\(/);
@@ -100,4 +100,12 @@ test('UI includes one-click body wrap, intentional hem expansion and 3D touch dr
  assert.match(main,/canvas\.addEventListener\('pointerdown'/);
  assert.match(main,/canvas\.addEventListener\('pointermove'/);
  assert.match(main,/getHemHandle\(/);
+});
+
+test('auto-fit can choose body mesh without a skeleton and ignores imported attachments',()=>{
+ const avatar=new THREE.Group(),bodyMesh=body(),accessory=dress().root;
+ avatar.add(bodyMesh);avatar.add(accessory);
+ const found=findFitSources(avatar);
+ assert.equal(found.length,1);
+ assert.strictEqual(found[0],bodyMesh);
 });
