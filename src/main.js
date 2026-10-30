@@ -7,6 +7,7 @@ import {selectAnchorBone, inspectAvatar, PART_ANCHORS, makePartConfig, exportPro
 import {captureWingGeometry,deformWingGeometry,deformWingGeometryAsync,detectWingSpanAxis} from './wing-geometry.mjs';
 import {saveOutput} from './save-output.mjs';
 import {inspectGLBBytes} from './glb-verify.mjs';
+import {createWingBoneRig,makeWingFlapClip,poseWingRig} from './wing-rig.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 
 const $ = id => document.getElementById(id);
@@ -27,6 +28,7 @@ const grid=new THREE.GridHelper(12,24,0x57586a,0x2e3342);grid.position.y=-.012;s
 const loader=new GLTFLoader();
 const avatar=new THREE.Group();avatar.name='PhoenixAvatarRoot';scene.add(avatar);
 let base=null,modelName='',clips=[],parts=[],selection=null,serial=0,avatarHeight=1,baseBoundingBox=null;
+let wingMixer=new THREE.AnimationMixer(avatar);
 const transform=new TransformControls(camera,renderer.domElement);
 transform.setMode('translate');
 transform.setSpace('local');
@@ -54,7 +56,9 @@ new ResizeObserver(resize).observe(canvas);resize();
 let lastFrameTime=0;
 renderer.setAnimationLoop((time)=>{
  if(document.hidden||time-lastFrameTime<33) return;
+ const dt=Math.min((time-lastFrameTime)/1000,.08);
  lastFrameTime=time;
+ wingMixer.update(dt);
  orbit.update();renderer.render(scene,camera);
 });
 function centerView(){
@@ -83,6 +87,7 @@ function writeMorphs(){
 async function loadBase(file){
  toast('Загрузка 3D-модели…');const gltf=await parseGLB(file);
  transform.detach(); orbit.enabled=true;
+ wingMixer.stopAllAction(); wingMixer=new THREE.AnimationMixer(avatar);
  for(const p of parts){p.removed=true;p.container.parent?.remove(p.container);}
  parts=[];selection=null;
  if(base){avatar.remove(base);dispose(base);}
@@ -232,6 +237,44 @@ $('resetWings').addEventListener('click',()=>{
  p.config.wingCenterOffset=0;p.config.wingSpanAxis='auto';p.config.wingFoldDirection=-1;
  queueWingDeformation(p);syncWingSliders(p);lockWings();
 });
+const MAX_RIG_VERTICES=250_000;
+function updateRigPanel(p){
+ const canRig=!!p?.wingSource && !p?.wingRig && p.wingVertices<=MAX_RIG_VERTICES;
+ $('rigWings').disabled=!canRig;
+ $('previewWingFlap').disabled=!p?.wingRig;
+ $('stopWingFlap').disabled=!p?.wingRig;
+ $('rigWingStatus').textContent= !p?.wingSource
+  ? 'Сначала загрузи крылья GLB и подготовь их для сгиба.'
+  : p.wingRig
+   ? '✅ Две независимые кости и автоматические веса готовы. Можно включить махи, затем сохранить GLB с анимацией.'
+   : p.wingVertices>MAX_RIG_VERTICES
+    ? '⚠️ Крылья: '+p.wingVertices.toLocaleString('ru-RU')+' вершин. Сгиб доступен, но автокости ограничены '+MAX_RIG_VERTICES.toLocaleString('ru-RU')+' вершинами для безопасности.'
+    : p.rigProblem||'Согни и установи крылья, затем нажми «Создать 2 кости». Риг не изменит скелет тела.';
+}
+$('rigWings').addEventListener('click',async()=>{
+ const p=selected();if(!p?.wingSource||p.wingRig||p.wingVertices>MAX_RIG_VERTICES)return;
+ $('rigWings').disabled=true;
+ try{
+  if(p.wingTask)await p.wingTask;
+  if(p.removed)return;
+  p.wingRig=createWingBoneRig(p.wingSource,{id:p.id,config:p.config});
+  p.wingClip=makeWingFlapClip(p.wingRig,{angle:25,direction:p.config.wingFoldDirection,duration:2});
+  p.rigProblem='';
+  toast('Крыльям добавлены левая и правая кости, создана анимация махов. GLB сохранит скин и клип.');
+ }catch(e){p.rigProblem=e.message;error(e);}
+ updateRigPanel(p);
+});
+$('previewWingFlap').addEventListener('click',()=>{
+ const p=selected();if(!p?.wingRig||!p.wingClip)return;
+ poseWingRig(p.wingRig,0,p.config.wingFoldDirection);
+ wingMixer.clipAction(p.wingClip).reset().play();
+ toast('Предпросмотр махов крыльями. Две кости двигаются независимо от скелета персонажа.');
+});
+$('stopWingFlap').addEventListener('click',()=>{
+ const p=selected();if(!p?.wingRig||!p.wingClip)return;
+ wingMixer.clipAction(p.wingClip).stop();
+ poseWingRig(p.wingRig,0,p.config.wingFoldDirection);
+});
 function movePartToBack(p){
  if(!base||p.config.anchor==='back')return;
  // Re-anchoring a detail previously imported as hair/other makes wings
@@ -311,6 +354,7 @@ function renderWingPanel(){
  }
  lockWings();
  if(ready)syncWingSliders(p);
+ updateRigPanel(p);
 }
 $('goWings').addEventListener('click',()=>{
  $('wingSection').scrollIntoView({behavior:'smooth',block:'start'});
@@ -450,7 +494,7 @@ function resetTransform(what){
 $('resetPosition').addEventListener('click',()=>resetTransform('position'));
 $('resetRotation').addEventListener('click',()=>resetTransform('rotation'));
 $('resetAll').addEventListener('click',()=>resetTransform('all'));
-$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
+$('delPart').addEventListener('click',()=>{const p=selected();if(!p)return;p.removed=true;transform.detach();p.container.parent?.remove(p.container);if(p.fallback)p.fallback.parent?.remove(p.fallback);if(p.wingClip)wingMixer.clipAction(p.wingClip).stop();dispose(p.container);parts=parts.filter(x=>x!==p);selection=parts.at(-1)?.id||null;renderParts();});
 $('togglePart').addEventListener('click',()=>{const p=selected();if(!p)return;p.config.visible=!p.config.visible;placePart(p);renderParts();});
 $('saveJson').addEventListener('click',async()=>{
  if(!base){toast('Нет проекта для сохранения');return;}
@@ -469,12 +513,14 @@ $('exportGlb').addEventListener('click',async()=>{
  try{
   // Never export half-written vertex buffers from a chunked high-poly fold.
   await Promise.all(parts.map(p=>p.wingTask).filter(Boolean));
+  // Skin inverse matrices should match the wing rest pose at export time.
+  for(const p of parts){if(p.wingRig&&p.wingClip){wingMixer.clipAction(p.wingClip).stop();poseWingRig(p.wingRig,0,p.config.wingFoldDirection);}}
   if(parts.some(p=>p.wingProblem?.startsWith('Ошибка сгиба'))){throw new Error('Не удалось завершить сгиб крыльев. Экспорт отменён.');}
   toast('Запекание добавленных деталей в GLB…');
   // All attached accessory meshes belong to the avatar export hierarchy.
   // Deformed wing geometry is already real BufferGeometry, not a shader effect.
   const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
-   binary:true,onlyVisible:true,animations:clips
+   binary:true,onlyVisible:true,animations:[...clips,...parts.map(p=>p.wingClip).filter(Boolean)]
   }));
   // Verify attachment IDs via the GLB JSON chunk. Parsing it without
   // reloading all textures/meshes avoids doubling memory on Android.
