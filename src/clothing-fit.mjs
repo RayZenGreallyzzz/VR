@@ -28,6 +28,22 @@ function atBandWidth(geo,bandMin,bandMax,centerX){
  r.sort((a,b)=>a-b);
  return 2*r[Math.floor((r.length-1)*.72)];
 }
+export function findFitSources(root){
+ const sources=[];
+ root?.traverse(o=>{
+  if(!o.isMesh||!o.geometry?.getAttribute('position'))return;
+  let parent=o,attachment=false;
+  while(parent){
+   if(parent.userData?.avatarPart){attachment=true;break;}
+   parent=parent.parent;
+  }
+  if(!attachment)sources.push(o);
+ });
+ return sources.sort((a,b)=>{
+  const rank=m=>(m.isSkinnedMesh?1e9:0)+(m.geometry.getAttribute('position')?.count||0);
+  return rank(b)-rank(a);
+ });
+}
 export function prepareFlare(root){
  const meshes=clothingMeshes(root);
  root.updateWorldMatrix(true,true);
