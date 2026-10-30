@@ -1,3 +1,13 @@
+## v0.8 — optional wing skeleton and flap animation (experimental)
+
+- **Create two wing bones + automatic skin weights** after fitting and folding wings. This adds a separate WingRoot + WingLeft/WingRight skeleton to imported wing geometry without altering the avatar's original skeleton.
+- **Flap preview / Stop** use the Three.js animation mixer. The generated glTF animation clip accompanies other imported animations when saving the GLB.
+- A feathered hinge strip shares weights with the center bone to reduce tearing near the wing mount. The mesh keeps its original materials, texture coordinates and vertex count.
+- For Android memory safety, wing rig creation is limited to **250,000 vertices** per wing part. Higher-poly wings remain foldable in v0.7's chunked mode.
+- This is a **basic two-bone wing rig**, not full multi-joint flight physics or VRChat PhysBones. Unity/VRChat SDK setup and platform validation are still separate. Imported wings that already have a skeleton are not overwritten.
+
+**Testing:** CI checks valid skin weights, separate wing joints, flap keyframes, GLB export and re-import. Android touch behavior and custom textured GLB cases still require manual device testing.
+
 # Phoenix VR Avatar Studio (Android / Web)
 
 Separate avatar-customization app derived from the workflow of Rig Animation Studio **v7.9**. Does not modify the original animation editor.
