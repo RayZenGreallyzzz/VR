@@ -40,7 +40,9 @@ test('wing deformation controls are locked by default and throttled',()=>{
   assert.match(html,new RegExp('id="'+id+'"[^>]*disabled'));
  }
  assert.match(main,/lockWings\(\)/);
- assert.match(main,/requestAnimationFrame\(/);
+ const deformation=readFileSync(new URL('../src/wing-geometry.mjs',import.meta.url),'utf8');
+ assert.match(deformation,/requestAnimationFrame/);
+ assert.match(main,/deformWingGeometryAsync/);
  assert.ok(INTERACTIVE_WING_VERTICES<=100000);
  assert.ok(MAX_WING_VERTICES>=600000);
 });
