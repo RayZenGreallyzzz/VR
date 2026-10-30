@@ -7,6 +7,7 @@ Separate avatar-customization app derived from the workflow of Rig Animation Stu
 - The 100,000 vertex **live edit** threshold remains for responsive small GLBs. From 100,001 to 600,000 wing vertices, folding uses asynchronous, cancellable 6,000-vertex batches and an in-panel progress indicator instead of blocking the screen.
 - Repeated slider movement coalesces updates; an obsolete partial bend is replaced by a full rebake from pristine vertex positions.
 - **GLB export waits until all active wing operations finish.** This prevents saving only the first part of a large wing mesh.
+- Export validation reads only the **GLB JSON header and node metadata**, not a second copy of all meshes/textures. This reduces memory use when saving dense characters on Android.
 - Safety: geometry beyond 600,000 wing vertices still cannot be live-bent on a 4 GB tablet without preprocessing; import and rigid positioning remain available.
 - The 25° and 30° mirrored fold presets, always-visible wing panel, and back attachment locator from prior versions remain.
 
