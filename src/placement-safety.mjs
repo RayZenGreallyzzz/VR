@@ -1,4 +1,6 @@
-export const MAX_WING_VERTICES = 100_000;
+// Guard memory for 4 GB Android tablets. Large wings are baked in small chunks.
+export const MAX_WING_VERTICES = 600_000;
+export const INTERACTIVE_WING_VERTICES = 100_000;
 
 /** Hard-limit screen-filling imported accessories relative to the avatar. */
 export function limitAccessoryScale(requested,sourceSpan,avatarHeight,type='accessory'){
