@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.6 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v0.7 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
@@ -40,7 +40,7 @@
 </div></div><div class="hint">Деталь привязывается к кости и двигается вместе с ней. Для одежды с деформацией потребуется отдельная операция skin transfer.</div></section>
 <section id="wingSection" class="wing-section" aria-label="Редактор сгиба крыльев">
 <h2>🪽 2А · Сгиб крыльев — всегда доступен</h2>
-<div class="hint">Две прямые половины → V-образный сгиб у крепления на спине.</div>
+<div class="hint">Две прямые половины → V-образный сгиб у крепления на спине. До 100 000 вершин — быстрый режим; до 600 000 — безопасный пересчёт по частям с процентом выполнения. При экспорте GLB приложение дождётся окончания сгиба.</div>
 <label>Какие крылья редактировать<select id="wingTarget"><option value="">— Выбери импортированную деталь —</option></select></label>
 <div id="wingStatus" class="wing-status" role="status">Импортируй GLB и выбери деталь для сгибания. Этот раздел больше не исчезает.</div>
 <button id="makeWings" type="button">🪽 Назначить выбранную деталь крыльями</button>
