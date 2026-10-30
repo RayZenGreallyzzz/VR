@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v1.0 · Android / Web · локально</span></header>
+<header><strong>✦ PHOENIX VR <span style="font-weight:400">AVATAR STUDIO</span></strong><span class="stamp">v1.1 · Android / Web · локально</span></header>
 <main>
 <aside class="sidebar">
 <section><h2>1 · Персонаж</h2><label>Загрузить основу (GLB)<input id="baseFile" type="file" accept=".glb,model/gltf-binary"></label><div class="hint">Можно начать с демонстрационного персонажа. Исходная модель и её скелет сохраняются при экспорте.</div><div class="two"><button id="demo">Демо-персонаж</button><button id="fit">Центрировать</button></div></section>
@@ -73,6 +73,20 @@
 <button id="rigTail" type="button">🦴 Создать 3 сустава хвоста</button>
 <div class="two"><button id="previewTail" type="button">▶ Анимация хвоста</button><button id="stopTail" type="button">■ Остановить</button></div>
 <div id="tailStatus" class="wing-status" role="status">Загрузи хвост GLB; скелет создаётся отдельно от костей тела.</div></section>
+<section id="dressFitSection" aria-label="Подогнать одежду и расширить юбку">
+<h2>👗 2В · Одежда без заморочек</h2>
+<div class="hint">Импортируй GLB как «👕 Одежда». Нажми «Облегание тела», затем тяни за <strong>жёлтую сферу на подоле</strong> в 3D-окне — юбка станет пышнее, а пояс останется на месте.</div>
+<label>Меш персонажа для облегания<select id="fitBodySource"><option value="">— Выбери поверхность тела —</option></select></label>
+<div class="two"><label>Тип одежды<select id="fitStyle"><option value="dress">👗 Платье — свободный низ</option><option value="skirt">Юбка — талия</option><option value="top">Кофта — весь верх</option></select></label><label>Плотность<select id="fitStrength"><option value="0.35">Мягко</option><option value="0.65" selected>Средне</option><option value="0.90">Плотно</option></select></label></div>
+<button type="button" id="autoFitClothes" class="primary">✨ Авто-подгонка по телу</button>
+<div class="coord-head">Объём юбки / подола</div>
+<div class="scale-controls"><button id="flareMinus" type="button" aria-label="Уменьшить подол">−</button>
+<input id="flareValue" type="text" inputmode="decimal" value="1.00" aria-label="Множитель ширины подола">
+<button id="flarePlus" type="button" aria-label="Увеличить подол">+</button><button id="flareApply" type="button" class="primary">Применить</button></div>
+<div class="two"><button id="hemHandleToggle" type="button">🟡 Показать ручку подола</button><button id="flareReset" type="button">Сбросить объём</button></div>
+<div id="fitStatus" class="wing-status" role="status">Выбери импортированную одежду. Начни с облегания, затем расширяй подол.</div>
+<div class="hint">Верх и пояс остаются на месте; расширяется нижняя часть. Операции редактируют вершины и сохраняют UV. Для сложной одежды может понадобиться дополнительная ручная подгонка. Сначала объём, потом перенос весов.</div>
+</section>
 <section id="clothingSection" aria-label="Перенос весов на одежду">
 <h2>👕 2В · Весá одежды / Skin Transfer</h2>
 <div class="hint">После импорта и подгонки одежды к телу выбери меш тела с костями. Весá переносятся с ближайших треугольников поверхности, с плавным смешиванием до 4 костей. Одежда будет двигаться вместе с тем же скелетом.</div>
