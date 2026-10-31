@@ -120,7 +120,13 @@ export async function fitClothingByProfile(root,body,cage,{
    const maxDist=b.h*.085,limit=b.h*.045,bodyClearance=Math.min(clearance,b.h*.02);
    const staged=[];
    for(const mesh of g.meshes){
-    const attr=mesh.geometry.getAttribute('position'),next=new Float32Array(attr.array);
+    const attr=mesh.geometry.getAttribute('position'),next=new Float32Array(attr.count*3);
+    // Meshy/Tripo may use normalized Uint16 or interleaved GLB positions.
+    // Read decoded coordinates, not raw integer bytes: always promote the
+    // edited position stream to float32 before exporting.
+    for(let j=0;j<attr.count;j++){
+     next[j*3]=attr.getX(j);next[j*3+1]=attr.getY(j);next[j*3+2]=attr.getZ(j);
+    }
     const inverse=mesh.matrixWorld.clone().invert();
     for(let i=0;i<attr.count;i++){
      world.fromBufferAttribute(attr,i).applyMatrix4(mesh.matrixWorld);
@@ -151,8 +157,7 @@ export async function fitClothingByProfile(root,body,cage,{
    }
    for(const {mesh,next} of staged){
     mesh.geometry=mesh.geometry.clone();
-    const attr=mesh.geometry.getAttribute('position');
-    attr.array.set(next);attr.needsUpdate=true;
+    mesh.geometry.setAttribute('position',new THREE.Float32BufferAttribute(next,3));
     mesh.geometry.computeVertexNormals();
     mesh.geometry.computeBoundingBox();mesh.geometry.computeBoundingSphere();
    }
