@@ -20,7 +20,7 @@ function sampledBodyProfile(body,box){
  if(h<.1)throw new Error('Некорректная высота тела');
  const cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2;
  const mid=(box.min.y+box.max.y)/2;
- const maxR=h*.155,step=Math.max(1,Math.floor(attr.count/22000));
+ const maxR=h*.145,step=Math.max(1,Math.floor(attr.count/22000));
  const rTorso=[],rHips=[],zTorso=[],zHips=[];
  const point=new THREE.Vector3();
  body.updateWorldMatrix(true,false);
@@ -31,7 +31,7 @@ function sampledBodyProfile(body,box){
   // Arms can cross torso Y even on A-posed models. Restrict to the
   // central silhouette rather than the full character's arm span.
   if(r>maxR)continue;
-  if(q>=.55&&q<=.73){rTorso.push(r);zTorso.push(z);}
+  if(q>=.50&&q<=.67){rTorso.push(r);zTorso.push(z);}
   if(q>=.39&&q<=.56){rHips.push(r);zHips.push(z);}
  }
  const safe=(values,fallback)=>Math.max(fallback,percentile(values,.88)||0);
