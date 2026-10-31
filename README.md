@@ -1,3 +1,17 @@
+## v1.3 — SmartFit placement repair (experimental)
+
+v1.2 made several user-visible mistakes: it mounted clothes to a chest anchor before fitting, measured torso width using T-pose arms, treated the head-trimmed Body Cage as the full character height, and pulled garment vertices toward the nearest body triangle (flattening volume). It could misleadingly report a successful fit when the actual cloth shape was wrong.
+
+**v1.3 fixes:**
+- Clothing GLB imports in model-root space; v1.2 chest-mounted garments are detached safely on automatic fit without changing their world location.
+- Uses *full avatar body* height and samples central torso/hips with arm rejection. Outfit top placement depends on type: top/dress, skirt, pants.
+- Scales by garment torso or waistband (ignoring wide sleeves and skirts) then centers the whole garment.
+- Optional BVH pass **pushes only outward**, with small displacement limit; sleeves, trouser legs, and wide skirts are not sucked into the surface.
+- Reports numeric fit scale and vertex count. Preserves original avatar mesh, clothing UVs/materials and editor-only preview cage.
+- Automated T-pose/A-pose placement, root-space clothes, collision relief, and unrigged stage tests.
+
+**Limits:** Prototype geometric fitter, not physical clothing simulation, not complete auto bone rigging, does not detect garment semantic zones perfectly on arbitrary topology, and does not automatically remove existing fused underwear. A-pose vs T-pose sleeve mismatch may require pose retargeting. Test with a real target GLB on Android to evaluate placement.
+
 ## v1.2 — Phoenix SmartFit Body Cage (first working prototype)
 
 **One-button flow:** Load an avatar GLB, import garment as **👕 Одежда**, choose the source body surface, select *dress/top/pants/skirt*, tap **✨ Надеть выбранную одежду автоматически**. A lightweight Body Cage is generated if needed; it guides a shape/position fitting pass. On an already-rigged body, the app then attempts clothing weight transfer. On unrigged bodies, the operation fits the cloth but **explicitly reports** that rigging is still necessary for animation.

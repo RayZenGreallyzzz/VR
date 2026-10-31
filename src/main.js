@@ -719,7 +719,16 @@ $('smartDress').addEventListener('click',async()=>{
  smartBusy=true;let stage='error';
  try{
   restorePosePreview();
-  // Do not modify the imported body mesh; only this attachment is edited.
+  // Clothes from v1.2 can still be attached to a chest bone. Fitting must
+  // happen in the avatar root frame while preserving world coordinates.
+  if(p.container.parent!==base){
+   base.attach(p.container);
+   if(p.fallback){p.fallback.parent?.remove(p.fallback);p.fallback=null;}
+   p.config.anchor='root';
+   p.container.userData.avatarPart.anchor='root';
+   readObjectTransform(p);
+  }
+  // Never modify the imported body mesh; only the clothing attachment.
   const cage=await ensureBodyCage(),source=getSmartBody();
   cage.mesh.visible=false;
   const result=await runSmartDress(p.container,{
@@ -745,7 +754,7 @@ $('smartDress').addEventListener('click',async()=>{
   }
   p.smartFitStatus=stage==='skinned'
    ?'✅ Готово: одежда подогнана и привязана к '+source.skeleton.bones.length+' костям. Можно проверять анимацию и сохранять GLB.'
-   :result.warning;
+   :'✅ Одежда размещена: масштаб ×'+result.fit.scaleRatio.toFixed(2)+', '+result.fit.vertices+' вершин. '+result.warning;
   recordEdit();
   renderParts();
   toast(p.smartFitStatus);
@@ -861,7 +870,7 @@ function renderParts(){
 }
 async function addPart(file){
  if(!base){toast('Сначала загрузите основную модель');return;}
- const kind=$('kind').value,anchor=$('anchor').value,loaded=await parseGLB(file);
+ const kind=$('kind').value,anchor=$('kind').value==='clothing'?'root':$('anchor').value,loaded=await parseGLB(file);
  const config=makePartConfig({id:'part-'+(++serial),name:file.name,type:kind,anchor});
  const initialBox=new THREE.Box3().setFromObject(loaded.scene);
  if(initialBox.isEmpty())throw new Error('В файле детали нет видимой геометрии.');
@@ -869,12 +878,13 @@ async function addPart(file){
  const sourceSpan=Math.max(size.x,size.y,size.z,0.000001);
  const sizeLimit=limitAccessoryScale(1,sourceSpan,avatarHeight,kind);
  config.scale=sizeLimit.scale;
- const bone=selectAnchorBone(base,anchor);
+ const bone=selectAnchorBone(base,anchor); // Clothing itself is inserted at avatar root below.
  const container=new THREE.Group();container.name='Attachment:'+config.name;
  container.userData.avatarPart={id:config.id,type:kind,anchor};
  container.add(loaded.scene);
  let fallback=null;
- if(bone)bone.add(container);
+ if(kind==='clothing')base.add(container);
+ else if(bone)bone.add(container);
  else {
   fallback=new THREE.Group();fallback.name='AvatarAnchor:'+anchor;
   const pos=defaultAnchorPoint(baseBoundingBox,anchor);
@@ -893,6 +903,7 @@ async function addPart(file){
  if(kind==='wings')assignPartAsWings(p);
  parts.push(p);selection=p.id;renderParts();recordEdit();
  if(p.wingProblem)toast(p.wingProblem);
+ else if(kind==='clothing')toast('👕 Одежда загружена отдельно от костей. Выбери SmartFit → Надеть автоматически.');
  else toast(bone?'Деталь на кости '+bone.name+'. Масштаб ограничен безопасным пределом.':
   'Кость '+anchor+' не найдена: использована фиксированная точка крепления '+anchor+' на теле (без скелета).');
 }
