@@ -878,7 +878,7 @@ async function addPart(file){
  const sourceSpan=Math.max(size.x,size.y,size.z,0.000001);
  const sizeLimit=limitAccessoryScale(1,sourceSpan,avatarHeight,kind);
  config.scale=sizeLimit.scale;
- const bone=kind==='clothing'?null:selectAnchorBone(base,anchor);
+ const bone=selectAnchorBone(base,anchor); // Clothing itself is inserted at avatar root below.
  const container=new THREE.Group();container.name='Attachment:'+config.name;
  container.userData.avatarPart={id:config.id,type:kind,anchor};
  container.add(loaded.scene);
