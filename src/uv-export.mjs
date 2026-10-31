@@ -46,7 +46,7 @@ export async function withBakedUVTransforms(root,exportFn){
   if(!textures.length)continue;
   const t=texTransform(textures[0]);
   if(neutral(t)||t.channel!==0||!approx(t.rotation,0))continue;
-  if(!textures.every(tex=>same(texTransform(tex),t)))continue;
+  if(!textures.every(tex=>same(texTransform(tex),t)&&approx(tex.center.x,0)&&approx(tex.center.y,0)))continue;
   if(!meshes.every(mesh=>mesh.geometry?.getAttribute('uv')?.itemSize===2
    &&geoMeshes.get(mesh.geometry)===1))continue;
   planned.set(mat,{meshes,textures,t});
