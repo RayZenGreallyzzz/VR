@@ -110,3 +110,27 @@ test('Manual UI preserves imported garment under avatar root (not chest bone)',(
  assert.match(main,/base.attach\(p.container\)/);
  assert.match(main,/anchor='root'/);
 });
+
+test('Quantized normalized GLB garment vertices are decoded to float32 before SmartFit writes geometry',async()=>{
+ const body=character('t'),root=createGarment('dress'),mesh=root.children[0];
+ const attr=mesh.geometry.getAttribute('position'),packed=new Uint16Array(attr.count*3);
+ for(let i=0;i<attr.count;i++){
+  packed[i*3]=Math.round((attr.getX(i)+1)/2*65535);
+  packed[i*3+1]=Math.round((attr.getY(i)+1)/2*65535);
+  packed[i*3+2]=Math.round((attr.getZ(i)+1)/2*65535);
+ }
+ mesh.geometry.setAttribute('position',new THREE.Uint16BufferAttribute(packed,3,true));
+ mesh.position.add(new THREE.Vector3(-1,-1,-1));
+ mesh.scale.multiplyScalar(2);
+ root.updateWorldMatrix(true,true);
+ const beforeUV=Float32Array.from(mesh.geometry.attributes.uv.array);
+ const fitted=await fitClothingByProfile(root,body,{mesh:body},
+  {style:'dress',strength:.25,yieldControl:fast});
+ const updated=mesh.geometry.getAttribute('position');
+ assert.ok(updated.array instanceof Float32Array,'must not round fractional coordinates to integers');
+ assert.equal(updated.normalized,false);
+ assert.deepEqual(mesh.geometry.attributes.uv.array,beforeUV);
+ assert.ok(fitted.vertices>0);
+ const box=new THREE.Box3().setFromObject(root);
+ assert.ok(box.getSize(new THREE.Vector3()).x>.15);
+});
