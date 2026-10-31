@@ -62,7 +62,7 @@
 <div class="hint">Создать по кости для левой и правой половины. Веса распределяются автоматически, исходные UV и материалы остаются. Для модели с уже существующим скелетом крыльев повторный риг недоступен.</div>
 <button id="rigWings" type="button">🦴 Создать 2 кости и авто-веса</button>
 <div class="two"><button id="previewWingFlap" type="button">▶ Махи крыльями</button><button id="stopWingFlap" type="button">■ Остановить</button></div>
-<div class="hint" id="rigWingStatus" role="status">Кости крыльев ещё не созданы. Сначала подгони изгиб к спине.</div><div class="hint">Два крыла сгибаются у общего центрального крепления. 25–30° — рекомендуемый старт; точное положение на спине настраивается X/Y/Z. Изменяется геометрия самой детали и сохраняется при экспорте GLB. Костную анимацию крыла это не создаёт.</div>
+<div class="hint" id="rigWingStatus" role="status">Кости крыльев ещё не созданы. Сначала подгони изгиб к спине.</div><div class="hint">🪽 Плавный безопасный сгиб: без резкого разрыва на шарнире; отдельные перья сохраняют жёсткость. UV и PBR текстуры не изменяются. Для необычных крыльев выбери правильную ось X/Y/Z. Сначала пробуй 25–30°, затем проверяй сохранение GLB.</div>
 </div>
 
 </section>
@@ -116,6 +116,9 @@
 <div class="two"><button id="undoEdit" type="button" disabled>↶ Отменить</button><button id="redoEdit" type="button" disabled>↷ Повторить</button></div>
 <div class="hint">Undo/Redo: положение, поворот, размер, видимость и настройки сгиба. Добавление и удаление деталей пока не включены в историю.</div>
 <label>Открыть редактируемый проект (GLB)<input id="projectFile" type="file" accept=".glb,model/gltf-binary"></label>
+<label>Общее запекание PNG в экспорт GLB · вся модель и все детали
+<select id="exportTextureSize"><option value="1024">1024 — облегчённый файл</option><option value="2048" selected>2048 — стандарт для Android</option><option value="4096">4096 — максимум качества, нужен запас памяти</option></select></label>
+<div id="exportTextureStatus" class="wing-status" role="status">При сохранении GLB все материалы и импортированные детали преобразуются во встроенные PNG. Совместимое повторение UV запекается в координаты без потери тайлинга. Меши и кости не объединяются автоматически.</div>
 <button id="saveProject" type="button" class="primary">💾 Сохранить проект GLB…</button><div class="two"><button id="saveJson">Настройки JSON</button><button id="exportGlb" class="primary">Сохранить GLB…</button></div><div class="hint">На Android открывается системный выбор места сохранения. Редактируемый GLB содержит модели и настройки; JSON остаётся отдельным файлом без геометрии. GLB объединяет сцену, но не преобразует автоматически её в загружаемый VRChat-аватар.</div></section>
 </aside>
 <div class="viewport"><canvas id="canvas"></canvas><div class="toast" id="toast">Выбери демонстрационного персонажа или импортируй свой GLB.</div><div class="legend">Поворот: 1 палец · Масштаб: 2 пальца / колёсико · Перемещение: 2 пальца</div></div>

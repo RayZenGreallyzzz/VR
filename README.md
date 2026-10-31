@@ -1,3 +1,11 @@
+## v1.4 — Universal portable PNG materials & safer wing folding
+
+- **Every GLB export** (also editable project) temporarily renders every avatar and accessory PBR texture into PNG. No EXT_texture_webp dependency is left in the saved GLB; the exported binary JSON is verified and the original editor textures are restored even when saving fails. This applies to **tails, wings, clothing, hair, horns, ears and all imported details** equally. Select 1024/2048/4096 texture size in the UI; 2048 is the Android default.
+- **16× and other identical UV tiling transforms** are moved into mesh UV0 coordinates when all texture maps of a single-material mesh agree. Standard glTF REPEAT sampling is preserved without KHR_texture_transform; materials with multiple conflicting UV transforms retain the standard extension rather than corrupting textures.
+- **Wing folding** decodes quantized/interleaved vertex attributes into float32 before deformation, keeps UV/materials unchanged, uses a continuous swept-arc bend without the old hinge-position discontinuity, and handles small independent feather meshes rigidly to reduce paper-crumple.
+- **No false atlas claim:** PNG packing in one GLB does **not** unify all materials into one UV atlas, nor physically weld separate mesh objects to the avatar. Skin and individual PBR slots are preserved. Universal atlas merging and true multi-piece feather topology analysis are separate work.
+- **Resource safety:** texture conversion is sequential in Android and uses max 2048 resolution by default. In a 4 GB tablet, large source GLBs (>1 M triangles and many 4K textures) may remain slow or exceed memory; do not assume real-device validation until tested there.
+
 ## v1.3 — SmartFit placement repair (experimental)
 
 v1.2 made several user-visible mistakes: it mounted clothes to a chest anchor before fitting, measured torso width using T-pose arms, treated the head-trimmed Body Cage as the full character height, and pulled garment vertices toward the nearest body triangle (flattening volume). It could misleadingly report a successful fit when the actual cloth shape was wrong.
