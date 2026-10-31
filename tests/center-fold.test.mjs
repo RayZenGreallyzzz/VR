@@ -37,10 +37,10 @@ test('automatic span detection and explicit axis override work for vertical/nons
  assert.equal(detectWingSpanAxis(source,'x'),'x');
  deformWingGeometry(source,{wingSpanAxis:'auto',bendDegrees:30,wingFoldDirection:-1,hingeFraction:0});
  const array=mesh.geometry.attributes.position;
- near(array.getX(0),-1,'negative X depth for rear fold');
- near(array.getX(2),-1,'both halves negative X depth');
- near(array.getZ(0),-Math.sqrt(3),'left Z span');
- near(array.getZ(2),Math.sqrt(3),'right Z span');
+ assert.ok(array.getX(0)<-.85&&array.getX(0)>-1,'rear fold depth is curved smoothly');
+ near(array.getX(0),array.getX(2),'left/right fold depth remains mirrored');
+ near(array.getZ(0),-array.getZ(2),'left/right span remains mirrored');
+ assert.ok(Math.abs(array.getZ(0))>Math.sqrt(3)&&Math.abs(array.getZ(0))<2,'wing tip sits on smooth arc');
 });
 test('fold orientation and hinge offset are saved in project metadata',()=>{
  const part=makePartConfig({id:'wing-1',type:'wings',wingSpanAxis:'z',wingCenterOffset:.2,wingFoldDirection:-1,bendDegrees:30});
