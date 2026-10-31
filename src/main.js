@@ -15,6 +15,8 @@ import {prepareFlare,applyFlare,getHemHandle,autoFitClothing,findFitSources} fro
 import {createBodyCage} from './body-cage.mjs';
 import {smartDress as runSmartDress} from './smart-fit.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
+import {withPortablePNGTextures} from './texture-bake.mjs';
+import {withBakedUVTransforms} from './uv-export.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas=$('canvas');
@@ -1022,18 +1024,27 @@ async function saveCombinedGLB(asProject=false){
   avatar.userData.phoenixProject=serializeProject(included,modelName);
   // Keep the inner attachment groups as nodes, never fuse their materials/skin.
   const animations=[...clips,...parts.flatMap(p=>[p.wingClip,p.tailClip]).filter(Boolean)];
-  const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
-   binary:true,onlyVisible:!asProject,animations
-  }));
+  // Export all avatar and accessory textures as portable PNG in one GLB.
+  // Bake repeated UV transforms where safe, with automatic editor restore.
+  const portable=await withBakedUVTransforms(avatar,()=>withPortablePNGTextures(avatar,()=>
+   new Promise((resolve,reject)=>new GLTFExporter().parse(avatar,resolve,reject,{
+    binary:true,onlyVisible:!asProject,animations,maxTextureSize:Number($('exportTextureSize').value)||2048
+   })),{
+    maxSize:Number($('exportTextureSize').value)||2048,
+    onProgress:(done,total)=>{if(total)$('exportTextureStatus').textContent='PNG: '+Math.round(done/total*100)+'% ('+done+'/'+total+')';}
+   }
+  ));
+  const exported=portable.result.result;
   const required=included.map(p=>p.id);
-  const result=inspectGLBBytes(exported,required);
+  const result=inspectGLBBytes(exported,required,{requireEmbeddedPNG:true});
   await saveOutput(exported,asProject?'Phoenix_VR_Editable_Project.glb':'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  toast((asProject?'Проект':'Аватар')+' сохранён: '+result.meshes+' мешей, '+required.length+' деталей. Все слои остались внутри GLB.');
+  $('exportTextureStatus').textContent='✅ Встроено PNG: '+portable.result.convertedImages+' текстур; запечено UV материалов: '+portable.uvBakedMaterials+'.';
+  toast((asProject?'Проект':'Аватар')+' сохранён: '+result.meshes+' мешей, '+result.pngImages+' PNG и '+required.length+' деталей.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
-  else error(e);
+  else{$('exportTextureStatus').textContent='⚠️ '+(e?.message||String(e));error(e);}
  }finally{btn.disabled=false;}
 }
 $('exportGlb').addEventListener('click',()=>saveCombinedGLB(false));
