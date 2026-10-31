@@ -1,4 +1,4 @@
-import {autoFitClothing} from './clothing-fit.mjs';
+import {fitClothingByProfile} from './smart-fit-placement.mjs';
 import {findWeightSources,transferClothingWeights} from './clothing-weights.mjs';
 
 /**
@@ -17,7 +17,7 @@ export async function smartDress(garmentRoot,{cage,body,style='dress',
   throw new Error('Выбери тип одежды');
  if(!garmentRoot?.isObject3D)
   throw new Error('Нужна импортированная одежда');
- const fit=await autoFitClothing(garmentRoot,cage.mesh,{
+ const fit=await fitClothingByProfile(garmentRoot,body,cage,{
   style,strength,clearance,yieldControl,
   onProgress:(done,total)=>onProgress('fit',done,total)
  });
