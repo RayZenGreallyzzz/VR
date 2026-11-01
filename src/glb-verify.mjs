@@ -76,7 +76,7 @@ export function inspectGLBBytes(data,requiredAttachmentIds=[],{
  });
  if(requireRenderableAttachments&&empty.length)
   throw new Error('В GLB сохранились пустые детали без геометрии: '+empty.join(', '));
- for(let i=0;i<meshes;i++){
+ if(requireRenderableAttachments)for(let i=0;i<meshes;i++){
   const mesh=gltf.meshes[i];
   if(!mesh.primitives?.length||mesh.primitives.some(p=>!isInt(p.attributes?.POSITION)||
     p.attributes.POSITION>=(gltf.accessors?.length||0)))
