@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {WING_AXES} from './wing-bend.mjs';
+import {checkWingGeometryQuality,restoreWingGeometry} from './wing-quality.mjs';
 
 const indexOf={x:0,y:1,z:2};
 const clamp=(v,low,high)=>Math.max(low,Math.min(high,v));
@@ -156,17 +157,37 @@ function modifyRange(entry,start,end,params,vec){
  attr.needsUpdate=true;
 }
 function finalizeMesh(entry){
- entry.mesh.geometry.computeVertexNormals();
- entry.mesh.geometry.computeBoundingBox();
- entry.mesh.geometry.computeBoundingSphere();
+ const g=entry.mesh.geometry;
+ g.computeVertexNormals();
+ // TANGENT may be baked in an imported glTF and is invalid after altering
+ // positions. A stale tangent corrupts normal-map lighting ("paper texture").
+ if(g.getAttribute('tangent')){
+  if(g.index&&g.getAttribute('uv')&&g.getAttribute('normal'))g.computeTangents();
+  else g.deleteAttribute('tangent');
+ }
+ g.computeBoundingBox();
+ g.computeBoundingSphere();
+}
+function validateOrRestore(source,entry){
+ const quality=checkWingGeometryQuality({entries:[entry]});
+ if(!quality.ok){
+  restoreWingGeometry(source);
+  throw new Error(quality.reason);
+ }
 }
 export function deformWingGeometry(source,config={}){
  if(!source)return;
  const params=wingContext(source,config),vec=new THREE.Vector3();
- for(const entry of source.entries){
-  const count=entry.mesh.geometry.getAttribute('position').count;
-  modifyRange(entry,0,count,params,vec);
-  finalizeMesh(entry);
+ try{
+  for(const entry of source.entries){
+   const count=entry.mesh.geometry.getAttribute('position').count;
+   modifyRange(entry,0,count,params,vec);
+   validateOrRestore(source,entry);
+   finalizeMesh(entry);
+  }
+ }catch(e){
+  restoreWingGeometry(source);
+  throw e;
  }
  return params.axis;
 }
@@ -189,6 +210,7 @@ export async function deformWingGeometryAsync(source,config={},{
    if(processed<total)await yieldControl();
   }
   if(cancelled())return {cancelled:true,processed,total,axis:params.axis};
+  validateOrRestore(source,entry);
   finalizeMesh(entry);
  }
  return {cancelled:false,processed,total,axis:params.axis};
