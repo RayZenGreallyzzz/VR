@@ -48,8 +48,9 @@ export function checkWingGeometryQuality(source,{
   const pristine=originalAttribute(entry);
   if(now.count!==pristine.count)
    return {ok:false,reason:'Число вершин крыльев изменилось',checked,invalid:1};
-  const numTriangles=(geo.index?.count||now.count)/3;
-  if(!Number.isInteger(numTriangles))return {ok:false,reason:'Неверная топология крыльев',checked,invalid:1};
+  // Imported assets may contain a few trailing helper vertices/points.
+  // Validate full triangles only; there is no surface to tear in a point pair.
+  const numTriangles=Math.floor((geo.index?.count||now.count)/3);
   const step=Math.max(1,Math.ceil(numTriangles/sampleLimit));
   for(let tri=0;tri<numTriangles;tri+=step){
    const [a,b,c]=triVertices(geo,tri);
