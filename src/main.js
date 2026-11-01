@@ -17,6 +17,7 @@ import {smartDress as runSmartDress} from './smart-fit.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 import {withPortablePNGTextures} from './texture-bake.mjs';
 import {withBakedUVTransforms} from './uv-export.mjs';
+import {scanBodyFitZones,formatBodyFitReport} from './fit-diagnostics.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas=$('canvas');
@@ -690,6 +691,7 @@ function updateSmartPanel(){
  const p=selected(),ready=p?.config.type==='clothing'
   &&!p?.clothingWeighted&&!p.container?.getObjectByProperty('isSkinnedMesh',true);
  $('buildBodyCage').disabled=!sources.length||smartBusy;
+ $('inspectBodyFit').disabled=!sources.length||smartBusy;
  $('toggleBodyCage').disabled=!bodyCage||smartBusy;
  $('smartDress').disabled=!sources.length||!ready||smartBusy;
  $('toggleBodyCage').textContent=bodyCage?.mesh.visible?'🙈 Скрыть оболочку':'👁 Показать оболочку';
@@ -714,7 +716,17 @@ async function ensureBodyCage(){
  return created;
 }
 $('smartBodySource').addEventListener('change',()=>{
- releaseBodyCage();updateSmartPanel();
+ releaseBodyCage();
+ $('fitZoneReport').textContent='Для выбранного тела запусти диагностику заново.';
+ updateSmartPanel();
+});
+$('inspectBodyFit').addEventListener('click',()=>{
+ try{
+  const body=getSmartBody();
+  if(!body)throw new Error('Сначала загрузи персонажа GLB');
+  const report=scanBodyFitZones(body);
+  $('fitZoneReport').textContent=formatBodyFitReport(report);
+ }catch(e){$('fitZoneReport').textContent='⚠️ '+(e?.message||String(e));}
 });
 $('smartCageTop').addEventListener('change',()=>{
  releaseBodyCage();updateSmartPanel();
