@@ -58,7 +58,7 @@ export function scanBodyFitZones(mesh,{maxVertices=24000}={}){
  }
  const warnings=[];
  if(missing>1)warnings.push('Не удалось измерить '+missing+' зоны: в GLB могут быть волосы, броня, неверная ось или раздельные меши.');
- if((box.max.x-box.min.x)>height*2.5)warnings.push('Очень большой размах по X: возможно, крылья или аксессуар включены в основной меш.');
+ if((box.max.x-box.min.x)>height*1.65)warnings.push('Очень большой размах по X: возможно, крылья или аксессуар включены в основной меш.');
  if((box.max.z-box.min.z)>height*1.8)warnings.push('Необычно большая глубина: возможен хвост или дополнительные детали.');
  if(checked<100)warnings.push('Слишком мало вершин для надёжного измерения фигуры.');
  if(zones.chest.width&&zones.hips.width&&zones.chest.width/zones.hips.width>2)
