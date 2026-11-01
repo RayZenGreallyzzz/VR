@@ -1053,11 +1053,11 @@ async function saveCombinedGLB(asProject=false){
   ));
   const exported=portable.result.result;
   const required=included.map(p=>p.id);
-  const result=inspectGLBBytes(exported,required,{requireEmbeddedPNG:true});
+  const result=inspectGLBBytes(exported,required,{requireEmbeddedPNG:true,verifyPNGData:true,requireRenderableAttachments:true});
   await saveOutput(exported,asProject?'Phoenix_VR_Editable_Project.glb':'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  $('exportTextureStatus').textContent='✅ Встроено PNG: '+portable.result.convertedImages+' текстур; запечено UV материалов: '+portable.uvBakedMaterials+'.';
+  $('exportTextureStatus').textContent='✅ Контроль GLB пройден: '+result.meshes+' мешей, '+result.pngImages+' встроенных PNG, '+result.skins+' скинов, '+result.animations+' анимаций. Запечено UV материалов: '+portable.uvBakedMaterials+'.';
   toast((asProject?'Проект':'Аватар')+' сохранён: '+result.meshes+' мешей, '+result.pngImages+' PNG и '+required.length+' деталей.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
