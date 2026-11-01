@@ -38,12 +38,15 @@ test('nonzero-thickness wing surface has no hinge jump or crumple at the old sha
  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial());
  root.add(mesh);
  const s=captureWingGeometry(root);
- deformWingGeometry(s,{bendDegrees:60,hingeFraction:.08,wingSpanAxis:'x'});
+ // The deliberately disconnected triplets cross the hinge and create an
+ // impossible triangle. v1.5 must refuse and restore them, not export a tear.
+ assert.throws(()=>deformWingGeometry(s,{bendDegrees:60,hingeFraction:.08,wingSpanAxis:'x'}),/Сгиб повреждает/);
  const p=mesh.geometry.getAttribute('position');
- const d=(a,b)=>new THREE.Vector3().fromBufferAttribute(p,a).distanceTo(new THREE.Vector3().fromBufferAttribute(p,b));
- assert.ok(d(0,1)<.005,'no discontinuity across the outer hinge edge');
- assert.ok(d(2,3)<.005,'no surface rip across the hinge');
- for(let i=0;i<p.count;i++)for(const dim of ['getX','getY','getZ'])assert.ok(Number.isFinite(p[dim](i)));
+ for(let i=0;i<p.count;i++){
+  assert.ok(Math.abs(p.getX(i)-s.entries[0].original[i*3])<1e-6);
+  assert.ok(Math.abs(p.getY(i)-s.entries[0].original[i*3+1])<1e-6);
+  assert.ok(Math.abs(p.getZ(i)-s.entries[0].original[i*3+2])<1e-6);
+ }
 });
 test('KHR_mesh_quantization normalized vertices are decoded to float instead of crushed into integer noise',()=>{
  const group=new THREE.Group(),geometry=new THREE.BufferGeometry();
