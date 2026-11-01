@@ -362,12 +362,29 @@ function queueWingDeformation(p){
     deformWingGeometry(p.wingSource,config);
    }
    p.wingApplied=revision;
+   p.wingGoodConfig={...config};
+   if(p.wingProblem?.startsWith('Ошибка сгиба'))p.wingProblem='';
    if(selected()===p){
     $('wingStatus').textContent='✅ Сгиб применён к геометрии ('+p.wingVertices.toLocaleString('ru-RU')+' вершин). Экспорт GLB сохранит форму.';
    }
   }
  })().catch(e=>{
+  // Unsafe deformations restore pristine geometry. Reapply the previously
+  // accepted configuration to prevent editor/export inconsistencies.
+  const good=p.wingGoodConfig;
+  if(good){
+   p.config={...p.config,...good};
+   try{deformWingGeometry(p.wingSource,good);}catch{
+    p.config.bendDegrees=0;p.config.wingStretch=1;
+    p.config.hingeFraction=.08;p.config.wingCenterOffset=0;
+   }
+  }else{
+   p.config.bendDegrees=0;p.config.wingStretch=1;
+   p.config.hingeFraction=.08;p.config.wingCenterOffset=0;
+  }
+  if(selected()===p)syncWingSliders(p);
   p.wingProblem='Ошибка сгиба крыльев: '+e.message;
+  if(selected()===p)$('wingStatus').textContent='⚠️ '+e.message;
   error(e);
  }).finally(()=>{p.wingTask=null;});
  p.wingTask=work;
