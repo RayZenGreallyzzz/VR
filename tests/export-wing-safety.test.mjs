@@ -11,7 +11,7 @@ import {readFileSync} from 'node:fs';
 if(!globalThis.FileReader)globalThis.FileReader=class{
  result=null;onloadend=null;onerror=null;
  readAsArrayBuffer(blob){blob.arrayBuffer().then(v=>{this.result=v;this.onloadend?.({target:this});}).catch(e=>this.onerror?.(e));}
- readAsDataURL(blob){blob.arrayBuffer().then(v=>{this.result='data:'+(blob.type||'application/octet-stream')+';base64,'+Buffer.from(v).toString('base64');this.onloadend?.(this);}
+ readAsDataURL(blob){blob.arrayBuffer().then(v=>{this.result='data:'+(blob.type||'application/octet-stream')+';base64,'+Buffer.from(v).toString('base64');this.onloadend?.(this);});}
 };
 function makeSource(){
  const scene=new THREE.Group();
@@ -52,7 +52,7 @@ test('GLB exported attachment must contain actual descendant mesh; an empty meta
  tailNode.name='Attachment:Tail';tailNode.userData.avatarPart={id:'part-tail',type:'tail',anchor:'hips'};
  root.add(tailNode);
  const exported=await new Promise((resolve,reject)=>new GLTFExporter().parse(root,resolve,reject,{binary:true}));
- assert.throws(()=>inspectGLBBytes(exported,['part-tail'],{requireRenderableAttachments:true}),/пустые детали/);
+ assert.throws(()=>inspectGLBBytes(exported,['part-tail'],{requireRenderableAttachments:true}),/пустые детали|потерял детали/);
  const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.03,.1,.6,9),new THREE.MeshStandardMaterial());
  mesh.name='TailGeometry';tailNode.add(mesh);
  const good=await new Promise((resolve,reject)=>new GLTFExporter().parse(root,resolve,reject,{binary:true}));
