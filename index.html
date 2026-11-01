@@ -77,6 +77,8 @@
 <h2>✨ 2В · Phoenix SmartFit Body Cage</h2>
 <div class="hint">Для моделей Meshy/Tripo с миллионами треугольников: создаём лёгкую невидимую оболочку по поверхности, НЕ меняя исходный меш. Она подходит для тела, состоящего из множества несвязанных фрагментов.</div>
 <label>Поверхность тела<select id="smartBodySource"><option value="">— Выбери меш персонажа —</option></select></label>
+<button id="inspectBodyFit" type="button">🔍 Проверить зоны тела перед подгонкой</button>
+<div id="fitZoneReport" class="wing-status" style="white-space:pre-line" role="status">Измерения плеч, груди, талии, бёдер и ног помогут обнаружить неправильно выбранный GLB или размах крыльев до автоподгонки. Скелет не обязателен.</div>
 <label>Высота поверхности оболочки<select id="smartCageTop"><option value="0.78">78% — длинные рога, волосы</option><option value="0.86" selected>86% — стандарт, без головы</option><option value="0.94">94% — включая шею</option><option value="1">100% — вся модель (может захватить волосы)</option></select></label>
 <div class="two"><button id="buildBodyCage" type="button">🧍 Подготовить Body Cage</button><button id="toggleBodyCage" type="button">👁 Показать оболочку</button></div>
 <div class="hint">Оболочка — облегчённая геометрическая поверхность, не полное SDF. Попавшие в неё длинные волосы или декор иногда требуют выбора меньшей высоты.</div>

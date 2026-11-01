@@ -1,3 +1,15 @@
+## v1.5 — Stability milestone 1 (wing quality, export validation, fit preflight)
+
+**User-visible changes:**
+- Wing folding now checks sampled triangle edge/area distortion. On a severe crumple or degenerate fold the edit is rejected and pristine geometry / last validated pose restored rather than saving a broken wing. Imported normal-map TANGENT data are recalculated/removed when geometry changes. UVs stay untouched.
+- Every GLB save checks that each expected attachment contains actual mesh descendants, skinned skeleton joints and animation node references are valid, PNG images physically contain PNG headers inside the binary chunk (not merely a `mimeType` claim), and WebP external dependencies are absent.
+- SmartFit now has **🔍 Проверить зоны тела**: quick shoulder/chest/waist/hip/upper-leg/calf estimates, warnings for wrong body mesh / excessive wing span, before fitting. No skeleton is required.
+- New automated GLB export -> reimport and geometry tests; unit tests for PNG binary verification and wing rollback.
+
+**What is NOT finished yet:** full closed semantic Body Cage 2.0, arbitrary one-click accurate garment draping/weighting on *all* meshes, true texture atlas and high-poly→low-poly normal baking, guaranteed wing folding for every fragmented feather topology, Khronos validator integration. These remain in issue #17. Strict validator is structural, not a full conformance or visual fidelity guarantee.
+
+**Testing plan:** on actual Android tablet, first use a pair of wings at 0/25/30 degrees with native textures, save/reopen to verify. Then test dress fit on woman GLB. Finally import long-tail GLB with repeated textures, verify both skin and animation and appearance in a second viewer. Keep the unmodified source GLBs as backups. Debug APK has distinct Android ID so v1.4 can coexist.
+
 ## v1.4 — Universal portable PNG materials & safer wing folding
 
 - **Every GLB export** (also editable project) temporarily renders every avatar and accessory PBR texture into PNG. No EXT_texture_webp dependency is left in the saved GLB; the exported binary JSON is verified and the original editor textures are restored even when saving fails. This applies to **tails, wings, clothing, hair, horns, ears and all imported details** equally. Select 1024/2048/4096 texture size in the UI; 2048 is the Android default.

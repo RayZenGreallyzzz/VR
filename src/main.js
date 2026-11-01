@@ -17,6 +17,7 @@ import {smartDress as runSmartDress} from './smart-fit.mjs';
 import {limitAccessoryScale,parseScaleText,defaultAnchorPoint,MAX_WING_VERTICES,INTERACTIVE_WING_VERTICES} from './placement-safety.mjs';
 import {withPortablePNGTextures} from './texture-bake.mjs';
 import {withBakedUVTransforms} from './uv-export.mjs';
+import {scanBodyFitZones,formatBodyFitReport} from './fit-diagnostics.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas=$('canvas');
@@ -362,12 +363,29 @@ function queueWingDeformation(p){
     deformWingGeometry(p.wingSource,config);
    }
    p.wingApplied=revision;
+   p.wingGoodConfig={...config};
+   if(p.wingProblem?.startsWith('Ошибка сгиба'))p.wingProblem='';
    if(selected()===p){
     $('wingStatus').textContent='✅ Сгиб применён к геометрии ('+p.wingVertices.toLocaleString('ru-RU')+' вершин). Экспорт GLB сохранит форму.';
    }
   }
  })().catch(e=>{
+  // Unsafe deformations restore pristine geometry. Reapply the previously
+  // accepted configuration to prevent editor/export inconsistencies.
+  const good=p.wingGoodConfig;
+  if(good){
+   p.config={...p.config,...good};
+   try{deformWingGeometry(p.wingSource,good);}catch{
+    p.config.bendDegrees=0;p.config.wingStretch=1;
+    p.config.hingeFraction=.08;p.config.wingCenterOffset=0;
+   }
+  }else{
+   p.config.bendDegrees=0;p.config.wingStretch=1;
+   p.config.hingeFraction=.08;p.config.wingCenterOffset=0;
+  }
+  if(selected()===p)syncWingSliders(p);
   p.wingProblem='Ошибка сгиба крыльев: '+e.message;
+  if(selected()===p)$('wingStatus').textContent='⚠️ '+e.message;
   error(e);
  }).finally(()=>{p.wingTask=null;});
  p.wingTask=work;
@@ -673,6 +691,7 @@ function updateSmartPanel(){
  const p=selected(),ready=p?.config.type==='clothing'
   &&!p?.clothingWeighted&&!p.container?.getObjectByProperty('isSkinnedMesh',true);
  $('buildBodyCage').disabled=!sources.length||smartBusy;
+ $('inspectBodyFit').disabled=!sources.length||smartBusy;
  $('toggleBodyCage').disabled=!bodyCage||smartBusy;
  $('smartDress').disabled=!sources.length||!ready||smartBusy;
  $('toggleBodyCage').textContent=bodyCage?.mesh.visible?'🙈 Скрыть оболочку':'👁 Показать оболочку';
@@ -697,7 +716,17 @@ async function ensureBodyCage(){
  return created;
 }
 $('smartBodySource').addEventListener('change',()=>{
- releaseBodyCage();updateSmartPanel();
+ releaseBodyCage();
+ $('fitZoneReport').textContent='Для выбранного тела запусти диагностику заново.';
+ updateSmartPanel();
+});
+$('inspectBodyFit').addEventListener('click',()=>{
+ try{
+  const body=getSmartBody();
+  if(!body)throw new Error('Сначала загрузи персонажа GLB');
+  const report=scanBodyFitZones(body);
+  $('fitZoneReport').textContent=formatBodyFitReport(report);
+ }catch(e){$('fitZoneReport').textContent='⚠️ '+(e?.message||String(e));}
 });
 $('smartCageTop').addEventListener('change',()=>{
  releaseBodyCage();updateSmartPanel();
@@ -1036,11 +1065,11 @@ async function saveCombinedGLB(asProject=false){
   ));
   const exported=portable.result.result;
   const required=included.map(p=>p.id);
-  const result=inspectGLBBytes(exported,required,{requireEmbeddedPNG:true});
+  const result=inspectGLBBytes(exported,required,{requireEmbeddedPNG:true,verifyPNGData:true,requireRenderableAttachments:true});
   await saveOutput(exported,asProject?'Phoenix_VR_Editable_Project.glb':'Phoenix_VR_Avatar.glb','model/gltf-binary',(done,total)=>{
    if(total>10*1024*1024)toast('Сохранение GLB: '+Math.round(done/total*100)+'%');
   });
-  $('exportTextureStatus').textContent='✅ Встроено PNG: '+portable.result.convertedImages+' текстур; запечено UV материалов: '+portable.uvBakedMaterials+'.';
+  $('exportTextureStatus').textContent='✅ Контроль GLB пройден: '+result.meshes+' мешей, '+result.pngImages+' встроенных PNG, '+result.skins+' скинов, '+result.animations+' анимаций. Запечено UV материалов: '+portable.uvBakedMaterials+'.';
   toast((asProject?'Проект':'Аватар')+' сохранён: '+result.meshes+' мешей, '+result.pngImages+' PNG и '+required.length+' деталей.');
  }catch(e){
   if(String(e).includes('SAVE_CANCELLED'))toast('Сохранение отменено.');
